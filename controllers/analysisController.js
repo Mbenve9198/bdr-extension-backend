@@ -17,7 +17,7 @@ exports.analyzeEcommerce = async (req, res) => {
       });
     }
 
-    const { url, prospectId } = req.body;
+    const { url, prospectId, forceNew } = req.body;
     const userId = req.user._id;
 
     // Valida URL
@@ -42,21 +42,25 @@ exports.analyzeEcommerce = async (req, res) => {
       }
     }
 
-    // Controlla se esiste già un'analisi recente per questo URL
-    const existingAnalysis = await EcommerceAnalysis.findOne({
-      url: url.toLowerCase(),
-      createdAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) }, // ultime 24 ore
-      status: 'completed'
-    }).sort({ createdAt: -1 });
+    // Controlla se esiste già un'analisi recente per questo URL (solo se non forceNew)
+    if (!forceNew) {
+      const existingAnalysis = await EcommerceAnalysis.findOne({
+        url: url.toLowerCase(),
+        createdAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) }, // ultime 24 ore
+        status: 'completed'
+      }).sort({ createdAt: -1 });
 
-    if (existingAnalysis) {
-      console.log(`📋 Trovata analisi esistente per ${url}`);
-      return res.json({
-        success: true,
-        message: 'Analisi esistente trovata',
-        data: existingAnalysis.getSummary(),
-        fromCache: true
-      });
+      if (existingAnalysis) {
+        console.log(`📋 Trovata analisi esistente per ${url}`);
+        return res.json({
+          success: true,
+          message: 'Analisi esistente trovata',
+          data: existingAnalysis.getSummary(),
+          fromCache: true
+        });
+      }
+    } else {
+      console.log(`🔄 Forzata nuova analisi per ${url} (forceNew=true)`);
     }
 
     // Crea record analisi in stato 'processing'
@@ -222,6 +226,72 @@ exports.analyzeBatch = async (req, res) => {
 
   } catch (error) {
     console.error('Errore controller analyzeBatch:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Errore interno del server'
+    });
+  }
+};
+
+// Ottieni analisi più recente per dominio
+exports.getAnalysisByDomain = async (req, res) => {
+  try {
+    const { domain } = req.params;
+    
+    if (!domain) {
+      return res.status(400).json({
+        success: false,
+        message: 'Dominio richiesto'
+      });
+    }
+
+    // Normalizza il dominio (rimuovi www, protocollo, etc.)
+    const normalizedDomain = domain.toLowerCase()
+      .replace(/^https?:\/\//, '')
+      .replace(/^www\./, '')
+      .replace(/\/$/, '');
+
+    console.log(`🔍 Cerca analisi per dominio: ${normalizedDomain}`);
+
+    // Cerca l'analisi più recente per questo dominio
+    const analysis = await EcommerceAnalysis.findOne({
+      $or: [
+        { url: { $regex: normalizedDomain, $options: 'i' } },
+        { url: { $regex: `www.${normalizedDomain}`, $options: 'i' } }
+      ],
+      status: 'completed'
+    })
+    .sort({ createdAt: -1 })
+    .populate('prospect', 'name url company industry')
+    .populate('analyzedBy', 'firstName lastName username');
+
+    if (!analysis) {
+      return res.status(404).json({
+        success: false,
+        message: 'Nessuna analisi trovata per questo dominio'
+      });
+    }
+
+    // Controlla permessi (solo il creatore o admin/manager)
+    if (analysis.analyzedBy._id.toString() !== req.user._id.toString() && 
+        !['admin', 'manager'].includes(req.user.role)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Accesso negato'
+      });
+    }
+
+    console.log(`✅ Analisi trovata per ${normalizedDomain}: ${analysis._id}`);
+
+    res.json({
+      success: true,
+      data: analysis,
+      fromCache: true,
+      message: 'Analisi esistente trovata'
+    });
+
+  } catch (error) {
+    console.error('Errore getAnalysisByDomain:', error);
     res.status(500).json({
       success: false,
       message: 'Errore interno del server'

@@ -36,6 +36,7 @@ router.post('/batch', checkAnalysisLimit, batchAnalyzeValidation, analysisContro
 // Gestione risultati
 router.get('/', analysisController.getAnalysisList);
 router.get('/dashboard', analysisController.getDashboardStats);
+router.get('/by-domain/:domain', analysisController.getAnalysisByDomain);
 router.get('/:id', analysisController.getAnalysisById);
 router.get('/:id/export', analysisController.exportAnalysis);
 
