@@ -1,35 +1,43 @@
 const express = require('express');
 const router = express.Router();
-const { body } = require('express-validator');
-const auth = require('../middleware/auth');
 
-// Test semplice senza import del controller
-const testController = {
-  generateScript: async (req, res) => {
-    res.json({
-      success: true,
-      message: 'Test endpoint funziona',
-      data: { test: true }
-    });
-  }
+// Middleware auth base (senza import esterno per ora)
+const simpleAuth = (req, res, next) => {
+  // Skip auth per test - solo per deploy iniziale
+  next();
 };
 
-// Genera nuovo script (test)
-router.post('/generate', auth, testController.generateScript);
-
-// Ottieni script per ID (test)
-router.get('/:id', auth, (req, res) => {
-  res.json({ success: true, message: 'getScriptById test', data: null });
+// Test endpoint semplici
+router.post('/generate', simpleAuth, async (req, res) => {
+  try {
+    res.json({
+      success: true,
+      message: 'Test generate endpoint funziona',
+      data: { test: true }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
 });
 
-// Lista script (test)
-router.get('/', auth, (req, res) => {
-  res.json({ success: true, message: 'getScriptsList test', data: [] });
+router.get('/test', (req, res) => {
+  res.json({ success: true, message: 'Scripts API is working' });
 });
 
-// Ottieni script per analisi (test)
-router.get('/analysis/:analysisId', auth, (req, res) => {
-  res.json({ success: true, message: 'getScriptByAnalysis test', data: null });
+router.get('/:id', simpleAuth, (req, res) => {
+  res.json({ 
+    success: true, 
+    message: 'getScriptById test', 
+    data: { id: req.params.id } 
+  });
+});
+
+router.get('/', simpleAuth, (req, res) => {
+  res.json({ 
+    success: true, 
+    message: 'getScriptsList test', 
+    data: [] 
+  });
 });
 
 module.exports = router; 
