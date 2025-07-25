@@ -5,7 +5,7 @@ const scriptGeneratorService = require('../services/scriptGeneratorService');
 const { validationResult } = require('express-validator');
 
 // Genera script di vendita
-exports.generateScript = async (req, res) => {
+const generateScript = async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -169,7 +169,7 @@ exports.generateScript = async (req, res) => {
 };
 
 // Ottieni script per ID
-exports.getScriptById = async (req, res) => {
+const getScriptById = async (req, res) => {
   try {
     const { id } = req.params;
     
@@ -208,7 +208,7 @@ exports.getScriptById = async (req, res) => {
 };
 
 // Lista script con filtri
-exports.getScriptsList = async (req, res) => {
+const getScriptsList = async (req, res) => {
   try {
     const {
       page = 1,
@@ -264,7 +264,7 @@ exports.getScriptsList = async (req, res) => {
 };
 
 // Ottieni script per analisi
-exports.getScriptByAnalysis = async (req, res) => {
+const getScriptByAnalysis = async (req, res) => {
   try {
     const { analysisId } = req.params;
     const { language = 'it' } = req.query;
@@ -350,8 +350,8 @@ function parseScriptComponents(scriptText) {
 }
 
 module.exports = {
-  generateScript: exports.generateScript,
-  getScriptById: exports.getScriptById,
-  getScriptsList: exports.getScriptsList,
-  getScriptByAnalysis: exports.getScriptByAnalysis
+  generateScript,
+  getScriptById,
+  getScriptsList,
+  getScriptByAnalysis
 }; 
