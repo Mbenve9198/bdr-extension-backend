@@ -122,15 +122,16 @@ class ApifyService {
         });
       }
 
-      // Calcola le metriche totali
+      // Calcola le metriche medie mensili
       const totalVisits = Array.from(monthlyVisits.values()).reduce((sum, visits) => sum + visits, 0);
-      const estimatedShipments = Math.round(totalVisits * 0.02); // 2% conversion rate
+      const averageMonthlyVisits = monthlyVisits.size > 0 ? Math.round(totalVisits / monthlyVisits.size) : 0;
+      const estimatedMonthlyShipments = Math.round(averageMonthlyVisits * 0.02); // 2% conversion rate mensile
 
-      // Processa i paesi con calcoli di spedizioni
+      // Processa i paesi con calcoli di spedizioni mensili
       const topCountries = rawData.topCountries?.map(country => ({
         ...country,
-        estimatedVisits: Math.round(totalVisits * country.visitsShare),
-        estimatedShipments: Math.round(totalVisits * country.visitsShare * 0.02)
+        estimatedVisits: Math.round(averageMonthlyVisits * country.visitsShare),
+        estimatedShipments: Math.round(averageMonthlyVisits * country.visitsShare * 0.02)
       })) || [];
 
       // Estrai vertical dalla category
@@ -178,9 +179,10 @@ class ApifyService {
         // Metriche calcolate
         calculatedMetrics: {
           totalVisitsLast3Months: totalVisits,
-          estimatedShipmentsLast3Months: estimatedShipments,
+          averageMonthlyVisits: averageMonthlyVisits,
+          estimatedMonthlyShipments: estimatedMonthlyShipments,
+          estimatedShipmentsLast3Months: estimatedMonthlyShipments, // Manteniamo per compatibilità ma ora è mensile
           conversionRate: 0.02,
-          averageMonthlyVisits: Math.round(totalVisits / monthlyVisits.size),
           topCountryByVisits: topCountries[0]?.countryName || '',
           topCountryByShipments: topCountries[0]?.countryName || ''
         },

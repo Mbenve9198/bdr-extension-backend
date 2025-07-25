@@ -90,9 +90,10 @@ const ecommerceAnalysisSchema = new mongoose.Schema({
   // Metriche calcolate
   calculatedMetrics: {
     totalVisitsLast3Months: { type: Number },
-    estimatedShipmentsLast3Months: { type: Number },
-    conversionRate: { type: Number, default: 0.02 }, // 2% default
     averageMonthlyVisits: { type: Number },
+    estimatedMonthlyShipments: { type: Number },
+    estimatedShipmentsLast3Months: { type: Number }, // Manteniamo per compatibilità
+    conversionRate: { type: Number, default: 0.02 }, // 2% default
     growthRate: { type: Number }, // crescita percentuale
     topCountryByVisits: { type: String },
     topCountryByShipments: { type: String }
@@ -159,16 +160,18 @@ ecommerceAnalysisSchema.methods.calculateMetrics = function() {
       this.calculatedMetrics.totalVisitsLast3Months / this.estimatedMonthlyVisits.size;
   }
   
-  // Calcola spedizioni stimate (2% conversion rate)
-  if (this.calculatedMetrics.totalVisitsLast3Months) {
-    this.calculatedMetrics.estimatedShipmentsLast3Months = 
-      Math.round(this.calculatedMetrics.totalVisitsLast3Months * this.calculatedMetrics.conversionRate);
+  // Calcola spedizioni stimate mensili (2% conversion rate)
+  if (this.calculatedMetrics.averageMonthlyVisits) {
+    this.calculatedMetrics.estimatedMonthlyShipments = 
+      Math.round(this.calculatedMetrics.averageMonthlyVisits * this.calculatedMetrics.conversionRate);
+    // Manteniamo per compatibilità ma ora rappresenta le spedizioni mensili
+    this.calculatedMetrics.estimatedShipmentsLast3Months = this.calculatedMetrics.estimatedMonthlyShipments;
   }
   
-  // Calcola spedizioni per paese
-  if (this.topCountries && this.topCountries.length > 0 && this.calculatedMetrics.totalVisitsLast3Months) {
+  // Calcola spedizioni per paese (mensili)
+  if (this.topCountries && this.topCountries.length > 0 && this.calculatedMetrics.averageMonthlyVisits) {
     this.topCountries.forEach(country => {
-      country.estimatedVisits = Math.round(this.calculatedMetrics.totalVisitsLast3Months * country.visitsShare);
+      country.estimatedVisits = Math.round(this.calculatedMetrics.averageMonthlyVisits * country.visitsShare);
       country.estimatedShipments = Math.round(country.estimatedVisits * this.calculatedMetrics.conversionRate);
     });
     
@@ -195,7 +198,9 @@ ecommerceAnalysisSchema.methods.getSummary = function() {
     name: this.name || this.url,
     vertical: this.vertical,
     totalVisitsLast3Months: this.calculatedMetrics.totalVisitsLast3Months,
-    estimatedShipmentsLast3Months: this.calculatedMetrics.estimatedShipmentsLast3Months,
+    averageMonthlyVisits: this.calculatedMetrics.averageMonthlyVisits,
+    estimatedMonthlyShipments: this.calculatedMetrics.estimatedMonthlyShipments,
+    estimatedShipmentsLast3Months: this.calculatedMetrics.estimatedShipmentsLast3Months, // Compatibilità
     topCountries: this.topCountries.slice(0, 5), // top 5 paesi
     category: this.category,
     status: this.status,
