@@ -14,10 +14,29 @@ const limiter = rateLimit({
   max: 100 // limite di 100 richieste per IP ogni 15 minuti
 });
 
+// CORS configuration for Chrome Extensions
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow Chrome extensions and specific domains
+    if (!origin || 
+        origin.startsWith('chrome-extension://') || 
+        origin.startsWith('moz-extension://') ||
+        origin === 'http://localhost:3000' ||
+        origin === 'https://bdr-extension-backend.onrender.com') {
+      callback(null, true);
+    } else {
+      callback(null, true); // Allow all for now - can be restricted later
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+};
+
 // Middleware
 app.use(helmet());
 app.use(limiter);
-app.use(cors());
+app.use(cors(corsOptions));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
