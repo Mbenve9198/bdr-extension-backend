@@ -1,4 +1,4 @@
-const fetch = require('node-fetch');
+// Usa fetch nativo di Node.js 18+ (non serve node-fetch)
 
 // Dati corrieri e prezzi
 const COURIER_PRICING = {
