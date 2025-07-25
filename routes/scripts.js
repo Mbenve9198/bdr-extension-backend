@@ -2,32 +2,34 @@ const express = require('express');
 const router = express.Router();
 const { body } = require('express-validator');
 const auth = require('../middleware/auth');
-const scriptController = require('../controllers/scriptController');
 
-// Genera nuovo script
-router.post('/generate', 
-  auth,
-  [
-    body('analysisId')
-      .notEmpty()
-      .withMessage('ID analisi richiesto')
-      .isMongoId()
-      .withMessage('ID analisi non valido'),
-    body('language')
-      .optional()
-      .isIn(['it', 'en', 'es', 'fr', 'de'])
-      .withMessage('Lingua non supportata')
-  ],
-  scriptController.generateScript
-);
+// Test semplice senza import del controller
+const testController = {
+  generateScript: async (req, res) => {
+    res.json({
+      success: true,
+      message: 'Test endpoint funziona',
+      data: { test: true }
+    });
+  }
+};
 
-// Ottieni script per ID
-router.get('/:id', auth, scriptController.getScriptById);
+// Genera nuovo script (test)
+router.post('/generate', auth, testController.generateScript);
 
-// Lista script
-router.get('/', auth, scriptController.getScriptsList);
+// Ottieni script per ID (test)
+router.get('/:id', auth, (req, res) => {
+  res.json({ success: true, message: 'getScriptById test', data: null });
+});
 
-// Ottieni script per analisi
-router.get('/analysis/:analysisId', auth, scriptController.getScriptByAnalysis);
+// Lista script (test)
+router.get('/', auth, (req, res) => {
+  res.json({ success: true, message: 'getScriptsList test', data: [] });
+});
+
+// Ottieni script per analisi (test)
+router.get('/analysis/:analysisId', auth, (req, res) => {
+  res.json({ success: true, message: 'getScriptByAnalysis test', data: null });
+});
 
 module.exports = router; 
