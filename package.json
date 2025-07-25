@@ -25,5 +25,17 @@
     "jest": "^29.6.2"
   },
   "author": "Marco Benvenuti",
-  "license": "ISC"
+  "license": "ISC",
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  },
+  "keywords": [
+    "ecommerce",
+    "analytics",
+    "bdr",
+    "similarweb",
+    "apify",
+    "business-development"
+  ]
 } 
