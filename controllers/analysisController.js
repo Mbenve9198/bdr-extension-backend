@@ -529,12 +529,12 @@ exports.exportAnalysis = async (req, res) => {
 
 // Genera analisi Perplexity e raccomandazioni corrieri
 exports.generatePerplexityAnalysis = async (req, res) => {
-  console.log('🤖 [PERPLEXITY] Richiesta ricevuta - ID:', req.params.analysisId);
+  console.log('🤖 [PERPLEXITY] Richiesta ricevuta - ID:', req.params.id);
   console.log('🤖 [PERPLEXITY] User ID:', req.user?._id);
   console.log('🤖 [PERPLEXITY] Headers:', req.headers.authorization ? 'Token presente' : 'Token mancante');
   
   try {
-    const { analysisId } = req.params;
+    const analysisId = req.params.id; // 🔥 CORRETTO: legge :id dal route
     const userId = req.user._id;
 
     // Trova l'analisi esistente
