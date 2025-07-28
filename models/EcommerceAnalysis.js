@@ -16,6 +16,77 @@ const countrySchema = new mongoose.Schema({
   estimatedShipments: { type: Number } // calcolato con 2% conversion rate
 }, { _id: false });
 
+// Schema per i corrieri raccomandati per paese
+const recommendedCourierSchema = new mongoose.Schema({
+  country: { type: String, required: true },
+  courierName: { type: String, required: true },
+  service: { type: String, required: true },
+  packageSize: { type: String, required: true }, // SMALL, MEDIUM, LARGE
+  listPrice: { type: Number, required: true },
+  discountedPrice: { type: Number, required: true },
+  currency: { type: String, default: '€' },
+  weightLimit: { type: String }
+}, { _id: false });
+
+// Schema per i dati di analisi Perplexity
+const perplexityAnalysisSchema = new mongoose.Schema({
+  // Corrieri attualmente utilizzati
+  currentCouriers: [{ type: String }], // es. ["BRT", "GLS", "DHL"]
+  
+  // Informazioni sui punti di ritiro
+  pickupPoints: {
+    available: { type: Boolean },
+    details: { type: String } // descrizione dei punti di ritiro disponibili
+  },
+  
+  // Informazioni assicurazione
+  insurance: {
+    available: { type: Boolean },
+    details: { type: String } // descrizione delle opzioni di assicurazione
+  },
+  
+  // Peso medio stimato dei pacchi
+  averagePackageWeight: {
+    value: { type: Number }, // peso in kg
+    details: { type: String }, // dettagli su come è stato stimato
+    confidence: { type: String, enum: ['high', 'medium', 'low'] }
+  },
+  
+  // Valore medio del carrello
+  averageCartValue: {
+    value: { type: Number }, // valore in euro
+    currency: { type: String, default: '€' },
+    details: { type: String }, // dettagli su come è stato stimato
+    confidence: { type: String, enum: ['high', 'medium', 'low'] }
+  },
+  
+  // Recensioni Google Maps
+  googleReviews: {
+    count: { type: Number },
+    averageRating: { type: Number },
+    details: { type: String } // link o dettagli aggiuntivi
+  },
+  
+  // Recensioni Trustpilot
+  trustpilotReviews: {
+    count: { type: Number },
+    averageRating: { type: Number },
+    details: { type: String } // link o dettagli aggiuntivi
+  },
+  
+  // Corrieri raccomandati per ogni paese
+  recommendedCouriers: [recommendedCourierSchema],
+  
+  // Metadati dell'analisi Perplexity
+  analysisMetadata: {
+    analyzedAt: { type: Date, default: Date.now },
+    confidence: { type: String, enum: ['high', 'medium', 'low'] },
+    dataQuality: { type: Number, min: 0, max: 100 }, // percentuale completezza dati
+    perplexityPrompt: { type: String }, // prompt inviato a Perplexity
+    perplexityResponse: { type: String } // risposta completa di Perplexity
+  }
+}, { _id: false });
+
 const ecommerceAnalysisSchema = new mongoose.Schema({
   prospect: {
     type: mongoose.Schema.Types.ObjectId,
@@ -126,7 +197,10 @@ const ecommerceAnalysisSchema = new mongoose.Schema({
     completeness: { type: Number, min: 0, max: 100 }, // percentuale completezza dati
     confidence: { type: Number, min: 0, max: 100 }, // fiducia nei dati
     lastUpdated: { type: Date }
-  }
+  },
+  
+  // Dati di Perplexity
+  perplexityAnalysis: perplexityAnalysisSchema
   
 }, {
   timestamps: true
@@ -204,7 +278,8 @@ ecommerceAnalysisSchema.methods.getSummary = function() {
     topCountries: this.topCountries.slice(0, 5), // top 5 paesi
     category: this.category,
     status: this.status,
-    analyzedAt: this.createdAt
+    analyzedAt: this.createdAt,
+    perplexityAnalysis: this.perplexityAnalysis // Include i dati di Perplexity
   };
 };
 

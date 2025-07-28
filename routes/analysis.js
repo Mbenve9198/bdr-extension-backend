@@ -40,4 +40,7 @@ router.get('/by-domain/:domain', analysisController.getAnalysisByDomain);
 router.get('/:id', analysisController.getAnalysisById);
 router.get('/:id/export', analysisController.exportAnalysis);
 
+// Analisi Perplexity e raccomandazioni corrieri
+router.post('/:id/perplexity', analysisController.generatePerplexityAnalysis);
+
 module.exports = router; 

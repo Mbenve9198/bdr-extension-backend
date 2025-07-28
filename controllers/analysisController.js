@@ -2,6 +2,7 @@ const EcommerceAnalysis = require('../models/EcommerceAnalysis');
 const Prospect = require('../models/Prospect');
 const User = require('../models/User');
 const apifyService = require('../services/apifyService');
+const perplexityService = require('../services/perplexityService');
 const { validationResult } = require('express-validator');
 
 // Analizza un singolo ecommerce
@@ -519,6 +520,120 @@ exports.exportAnalysis = async (req, res) => {
 
   } catch (error) {
     console.error('Errore exportAnalysis:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Errore interno del server'
+    });
+  }
+};
+
+// Genera analisi Perplexity e raccomandazioni corrieri
+exports.generatePerplexityAnalysis = async (req, res) => {
+  try {
+    const { analysisId } = req.params;
+    const userId = req.user._id;
+
+    // Trova l'analisi esistente
+    const analysis = await EcommerceAnalysis.findById(analysisId)
+      .populate('analyzedBy', 'firstName lastName email')
+      .populate('prospect', 'companyName website');
+
+    if (!analysis) {
+      return res.status(404).json({
+        success: false,
+        message: 'Analisi non trovata'
+      });
+    }
+
+    // Controlla permessi
+    if (analysis.analyzedBy._id.toString() !== userId.toString() && 
+        !['admin', 'manager'].includes(req.user.role)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Accesso negato'
+      });
+    }
+
+    // Controlla se esiste già un'analisi Perplexity recente (ultime 24 ore)
+    if (analysis.perplexityAnalysis && 
+        analysis.perplexityAnalysis.analysisMetadata && 
+        analysis.perplexityAnalysis.analysisMetadata.analyzedAt) {
+      
+      const lastAnalysis = new Date(analysis.perplexityAnalysis.analysisMetadata.analyzedAt);
+      const now = new Date();
+      const hoursDiff = (now - lastAnalysis) / (1000 * 60 * 60);
+      
+      if (hoursDiff < 24) {
+        console.log(`📋 Analisi Perplexity esistente per ${analysis.url} (${hoursDiff.toFixed(1)}h fa)`);
+        return res.json({
+          success: true,
+          message: 'Analisi Perplexity esistente trovata',
+          data: {
+            analysis: analysis.getSummary(),
+            perplexityData: analysis.perplexityAnalysis,
+            fromCache: true
+          }
+        });
+      }
+    }
+
+    console.log(`🤖 Inizio analisi Perplexity per ${analysis.url}`);
+
+    try {
+      // Esegui analisi Perplexity
+      const perplexityData = await perplexityService.analyzeEcommerce(
+        analysis.url, 
+        analysis.name || analysis.url
+      );
+
+      // Genera raccomandazioni corrieri basate sui paesi e peso stimato
+      const averageWeight = perplexityData.averagePackageWeight?.value || 2; // Default 2kg
+      const countries = analysis.topCountries || [];
+      
+      if (countries.length > 0) {
+        const courierRecommendations = perplexityService.generateCourierRecommendations(
+          countries, 
+          averageWeight
+        );
+        perplexityData.recommendedCouriers = courierRecommendations;
+      }
+
+      // Salva i dati nell'analisi
+      analysis.perplexityAnalysis = perplexityData;
+      await analysis.save();
+
+      console.log(`✅ Analisi Perplexity completata per ${analysis.url}`);
+
+      res.json({
+        success: true,
+        message: 'Analisi Perplexity completata con successo',
+        data: {
+          analysis: analysis.getSummary(),
+          perplexityData: perplexityData,
+          fromCache: false
+        }
+      });
+
+    } catch (perplexityError) {
+      console.error('❌ Errore analisi Perplexity:', perplexityError.message);
+      
+      // Salva errore nell'analisi
+      if (!analysis.errorLogs) analysis.errorLogs = [];
+      analysis.errorLogs.push({
+        message: `Errore Perplexity: ${perplexityError.message}`,
+        timestamp: new Date()
+      });
+      await analysis.save();
+
+      res.status(500).json({
+        success: false,
+        message: 'Errore nell\'analisi Perplexity',
+        error: perplexityError.message
+      });
+    }
+
+  } catch (error) {
+    console.error('Errore generatePerplexityAnalysis:', error);
     res.status(500).json({
       success: false,
       message: 'Errore interno del server'
