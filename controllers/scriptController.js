@@ -78,6 +78,12 @@ const generateScript = async (req, res) => {
     try {
       console.log(`🤖 Inizio generazione script per ${analysis.name}`);
 
+      // Controlla se le API keys sono configurate
+      if (!process.env.PERPLEXITY_API_KEY || !process.env.CLAUDE_API_KEY) {
+        console.log('⚠️ API keys mancanti, uso mock data per test');
+        throw new Error('API keys non configurate - usando dati mock per test');
+      }
+
       // Step 1: Analisi con Perplexity
       console.log('🔍 Analisi Perplexity...');
       const perplexityReport = await scriptGeneratorService.analyzeWithPerplexity(
@@ -143,7 +149,73 @@ const generateScript = async (req, res) => {
     } catch (scriptError) {
       console.error(`❌ Errore generazione script per ${analysis.name}:`, scriptError.message);
 
-      // Aggiorna record con errore
+      // Se sono le API keys mancanti, usa dati mock
+      if (scriptError.message.includes('API keys non configurate')) {
+        console.log('🔄 Fallback: generazione script con dati mock');
+        
+        // Mock data per test
+        const mockPerplexityData = {
+          couriers: ['Poste Italiane', 'GLS'],
+          averageOrderValue: 45,
+          averagePackageWeight: 0.5,
+          usesInsurance: false,
+          reviews: { googleMaps: 150, trustpilot: 89, averageRating: 4.2 },
+          additionalInfo: 'E-commerce di abbigliamento con focus su t-shirt personalizzate',
+          rawResponse: 'Mock response per test'
+        };
+
+        const isInternational = scriptGeneratorService.checkIfInternational(analysis);
+        const courierRecommendations = scriptGeneratorService.recommendCouriers(mockPerplexityData, isInternational);
+
+        // Genera script mock intelligente
+        const siteName = analysis.name || 'il vostro sito';
+        const shipments = analysis.calculatedMetrics?.estimatedMonthlyShipments || 750;
+        const topCountry = analysis.topCountries?.[0]?.countryName || 'Italia';
+
+        const mockScript = isInternational ? 
+          `Salve, chiamo da Sendcloud, sono Marco. Ho visto che ${siteName} spedisce circa ${shipments} pacchi al mese, principalmente verso ${topCountry}. Siamo la piattaforma #1 in Europa e possiamo offrirvi tariffe molto competitive per quel paese, posso parlare con lei?` :
+          `Salve, sono Marco di Sendcloud. Ho analizzato ${siteName} e ho visto che gestite circa ${shipments} spedizioni al mese. Sendcloud è la piattaforma #1 in Europa per automatizzare le spedizioni e ridurre i costi. Avreste 15 minuti per una demo questa settimana?`;
+
+        // Aggiorna record con dati mock
+        scriptRecord.perplexityReport = mockPerplexityData;
+        scriptRecord.script = {
+          language: language,
+          hook: mockScript,
+          qualificationQuestions: [
+            'Quanto tempo dedicate alle spedizioni ogni giorno?',
+            'Quali corrieri usate attualmente?',
+            'Che problemi avete con le spedizioni?',
+            'Gestite anche resi?',
+            'Quanto spendete in media per spedizione?'
+          ],
+          pricingSuggestions: {
+            recommendedCouriers: courierRecommendations,
+            insuranceInfo: {
+              national: "Valore pacco × 0,6%",
+              international: "Valore pacco × 1,5%"
+            }
+          },
+          closingNotes: "Proporre demo e prossimi step",
+          fullScript: `${mockScript}\n\nDOMANDE DI QUALIFICAZIONE:\n• Quanto tempo dedicate alle spedizioni?\n• Che problemi avete attualmente?\n• Gestite anche resi?\n\nCon Sendcloud potrete:\n• Automatizzare etichette\n• Ridurre costi del 15-25%\n• Migliorare tracking clienti\n\nPosso mostrarvi una demo di 15 minuti questa settimana?`
+        };
+        scriptRecord.isInternational = isInternational;
+        scriptRecord.topCountries = analysis.topCountries?.map(c => c.countryName) || [];
+        scriptRecord.estimatedShipments = shipments;
+        scriptRecord.status = 'completed';
+
+        await scriptRecord.save();
+
+        console.log(`✅ Script mock generato per ${analysis.name}`);
+
+        return res.json({
+          success: true,
+          message: 'Script generato con successo (mock data)',
+          data: scriptRecord,
+          scriptId: scriptRecord._id
+        });
+      }
+
+      // Aggiorna record con errore per altri tipi di errore
       scriptRecord.status = 'failed';
       scriptRecord.errorLogs.push({
         message: scriptError.message,
