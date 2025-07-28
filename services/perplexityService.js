@@ -20,6 +20,10 @@ class PerplexityService {
     
     try {
       console.log(`🤖 Chiamata Perplexity per analisi di ${websiteUrl}`);
+      console.log('📝 PROMPT INVIATO A PERPLEXITY:');
+      console.log('=' * 50);
+      console.log(prompt);
+      console.log('=' * 50);
       
       const response = await axios.post(this.baseUrl, {
         model: 'sonar-pro',
@@ -37,10 +41,27 @@ class PerplexityService {
         timeout: 30000 // 30 secondi timeout
       });
 
+      console.log('📡 RISPOSTA COMPLETA DA PERPLEXITY:');
+      console.log('=' * 50);
+      console.log('Status:', response.status);
+      console.log('Headers:', JSON.stringify(response.headers, null, 2));
+      console.log('Data completa:', JSON.stringify(response.data, null, 2));
+      console.log('=' * 50);
+
       const analysisText = response.data.choices[0].message.content;
+      
+      console.log('📄 TESTO ANALISI ESTRATTO:');
+      console.log('=' * 50);
+      console.log(analysisText);
+      console.log('=' * 50);
       
       // Parsing della risposta
       const parsedData = this.parsePerplexityResponse(analysisText);
+      
+      console.log('🔧 DATI PARSATI:');
+      console.log('=' * 50);
+      console.log(JSON.stringify(parsedData, null, 2));
+      console.log('=' * 50);
       
       return {
         ...parsedData,

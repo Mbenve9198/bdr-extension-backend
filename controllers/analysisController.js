@@ -569,14 +569,22 @@ exports.generatePerplexityAnalysis = async (req, res) => {
       
       if (hoursDiff < 24) {
         console.log(`📋 Analisi Perplexity esistente per ${analysis.url} (${hoursDiff.toFixed(1)}h fa)`);
+        
+        const cacheResponseData = {
+          analysis: analysis.getSummary(),
+          perplexityData: analysis.perplexityAnalysis,
+          fromCache: true
+        };
+
+        console.log('📤 [PERPLEXITY CACHE] Risposta da cache inviata al frontend:');
+        console.log('=' * 50);
+        console.log(JSON.stringify(cacheResponseData, null, 2));
+        console.log('=' * 50);
+
         return res.json({
           success: true,
           message: 'Analisi Perplexity esistente trovata',
-          data: {
-            analysis: analysis.getSummary(),
-            perplexityData: analysis.perplexityAnalysis,
-            fromCache: true
-          }
+          data: cacheResponseData
         });
       }
     }
@@ -587,21 +595,31 @@ exports.generatePerplexityAnalysis = async (req, res) => {
 
     try {
       // Esegui analisi Perplexity
+      console.log('🔄 [PERPLEXITY] Inizio chiamata a perplexityService.analyzeEcommerce...');
       const perplexityData = await perplexityService.analyzeEcommerce(
         analysis.url, 
         analysis.name || analysis.url
       );
+      console.log('✅ [PERPLEXITY] Analisi completata, dati ricevuti:', JSON.stringify(perplexityData, null, 2));
 
       // Genera raccomandazioni corrieri basate sui paesi e peso stimato
       const averageWeight = perplexityData.averagePackageWeight?.value || 2; // Default 2kg
       const countries = analysis.topCountries || [];
       
+      console.log('🌍 [PERPLEXITY] Paesi per raccomandazioni corrieri:', countries.map(c => c.countryName));
+      console.log('⚖️ [PERPLEXITY] Peso medio stimato:', averageWeight, 'kg');
+      
       if (countries.length > 0) {
+        console.log('🚚 [PERPLEXITY] Generazione raccomandazioni corrieri...');
         const courierRecommendations = perplexityService.generateCourierRecommendations(
           countries, 
           averageWeight
         );
         perplexityData.recommendedCouriers = courierRecommendations;
+        console.log('📦 [PERPLEXITY] Corrieri raccomandati generati:', courierRecommendations.length, 'raccomandazioni');
+        console.log('📦 [PERPLEXITY] Dettagli corrieri:', JSON.stringify(courierRecommendations, null, 2));
+      } else {
+        console.log('⚠️ [PERPLEXITY] Nessun paese disponibile per raccomandazioni corrieri');
       }
 
       // Salva i dati nell'analisi
@@ -610,18 +628,31 @@ exports.generatePerplexityAnalysis = async (req, res) => {
 
       console.log(`✅ Analisi Perplexity completata per ${analysis.url}`);
 
+      const responseData = {
+        analysis: analysis.getSummary(),
+        perplexityData: perplexityData,
+        fromCache: false
+      };
+
+      console.log('📤 [PERPLEXITY] Risposta finale inviata al frontend:');
+      console.log('=' * 50);
+      console.log(JSON.stringify(responseData, null, 2));
+      console.log('=' * 50);
+
       res.json({
         success: true,
         message: 'Analisi Perplexity completata con successo',
-        data: {
-          analysis: analysis.getSummary(),
-          perplexityData: perplexityData,
-          fromCache: false
-        }
+        data: responseData
       });
 
     } catch (perplexityError) {
-      console.error('❌ Errore analisi Perplexity:', perplexityError.message);
+      console.error('❌ [PERPLEXITY ERROR] Errore analisi Perplexity:', perplexityError.message);
+      console.error('❌ [PERPLEXITY ERROR] Stack completo:', perplexityError.stack);
+      console.error('❌ [PERPLEXITY ERROR] Tipo errore:', perplexityError.constructor.name);
+      if (perplexityError.response) {
+        console.error('❌ [PERPLEXITY ERROR] Response status:', perplexityError.response.status);
+        console.error('❌ [PERPLEXITY ERROR] Response data:', JSON.stringify(perplexityError.response.data, null, 2));
+      }
       
       // Salva errore nell'analisi
       if (!analysis.errorLogs) analysis.errorLogs = [];
@@ -630,6 +661,12 @@ exports.generatePerplexityAnalysis = async (req, res) => {
         timestamp: new Date()
       });
       await analysis.save();
+
+      console.error('📤 [PERPLEXITY ERROR] Risposta di errore inviata al frontend:', {
+        success: false,
+        message: 'Errore nell\'analisi Perplexity',
+        error: perplexityError.message
+      });
 
       res.status(500).json({
         success: false,
