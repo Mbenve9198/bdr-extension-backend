@@ -269,6 +269,7 @@ ecommerceAnalysisSchema.methods.calculateMetrics = function() {
 // Metodo per ottenere summary per il frontend
 ecommerceAnalysisSchema.methods.getSummary = function() {
   return {
+    _id: this._id, // ⭐ AGGIUNTO: Include l'ID per le chiamate API
     name: this.name || this.url,
     vertical: this.vertical,
     totalVisitsLast3Months: this.calculatedMetrics.totalVisitsLast3Months,
