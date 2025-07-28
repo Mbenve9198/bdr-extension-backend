@@ -5,6 +5,9 @@ const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 
+console.log('🚀 [SERVER] Caricamento variabili d\'ambiente...');
+console.log('🚀 [SERVER] PERPLEXITY_API_KEY presente:', !!process.env.PERPLEXITY_API_KEY);
+
 const app = express();
 const PORT = process.env.PORT || 5000;
 

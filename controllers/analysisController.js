@@ -529,6 +529,10 @@ exports.exportAnalysis = async (req, res) => {
 
 // Genera analisi Perplexity e raccomandazioni corrieri
 exports.generatePerplexityAnalysis = async (req, res) => {
+  console.log('🤖 [PERPLEXITY] Richiesta ricevuta - ID:', req.params.analysisId);
+  console.log('🤖 [PERPLEXITY] User ID:', req.user?._id);
+  console.log('🤖 [PERPLEXITY] Headers:', req.headers.authorization ? 'Token presente' : 'Token mancante');
+  
   try {
     const { analysisId } = req.params;
     const userId = req.user._id;
@@ -578,6 +582,8 @@ exports.generatePerplexityAnalysis = async (req, res) => {
     }
 
     console.log(`🤖 Inizio analisi Perplexity per ${analysis.url}`);
+    console.log('🤖 [PERPLEXITY] PerplexityService disponibile:', !!perplexityService);
+    console.log('🤖 [PERPLEXITY] Metodo analyzeEcommerce disponibile:', typeof perplexityService.analyzeEcommerce);
 
     try {
       // Esegui analisi Perplexity
@@ -633,10 +639,12 @@ exports.generatePerplexityAnalysis = async (req, res) => {
     }
 
   } catch (error) {
-    console.error('Errore generatePerplexityAnalysis:', error);
+    console.error('❌ [PERPLEXITY] Errore generatePerplexityAnalysis:', error);
+    console.error('❌ [PERPLEXITY] Stack:', error.stack);
     res.status(500).json({
       success: false,
-      message: 'Errore interno del server'
+      message: 'Errore interno del server',
+      error: error.message
     });
   }
 }; 
