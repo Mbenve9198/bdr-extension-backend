@@ -53,7 +53,6 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/users', require('./routes/users'));
 app.use('/api/prospects', require('./routes/prospects'));
 app.use('/api/analysis', require('./routes/analysis'));
-app.use('/api/scripts', require('./routes/scripts'));
 
 // Route di base
 app.get('/', (req, res) => {
@@ -64,8 +63,7 @@ app.get('/', (req, res) => {
       auth: '/api/auth',
       users: '/api/users', 
       prospects: '/api/prospects',
-      analysis: '/api/analysis',
-      scripts: '/api/scripts'
+      analysis: '/api/analysis'
     }
   });
 });
