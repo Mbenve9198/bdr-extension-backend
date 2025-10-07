@@ -43,4 +43,7 @@ router.get('/:id/export', analysisController.exportAnalysis);
 // Analisi Perplexity e raccomandazioni corrieri
 router.post('/:id/perplexity', analysisController.generatePerplexityAnalysis);
 
+// Ricerca ecommerce simili con Perplexity Deep Research
+router.post('/:id/similar', analysisController.findSimilarEcommerce);
+
 module.exports = router; 

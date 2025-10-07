@@ -684,4 +684,111 @@ exports.generatePerplexityAnalysis = async (req, res) => {
       error: error.message
     });
   }
+};
+
+// Trova ecommerce italiani simili usando Perplexity Deep Research
+exports.findSimilarEcommerce = async (req, res) => {
+  console.log('🔍 [SIMILAR] Richiesta ricerca ecommerce simili - ID:', req.params.id);
+  
+  try {
+    const analysisId = req.params.id;
+    const userId = req.user._id;
+
+    // Trova l'analisi esistente
+    const analysis = await EcommerceAnalysis.findById(analysisId)
+      .populate('analyzedBy', 'firstName lastName email')
+      .populate('prospect', 'companyName website');
+
+    if (!analysis) {
+      return res.status(404).json({
+        success: false,
+        message: 'Analisi non trovata'
+      });
+    }
+
+    // Controlla permessi
+    if (analysis.analyzedBy._id.toString() !== userId.toString() && 
+        !['admin', 'manager'].includes(req.user.role)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Accesso negato'
+      });
+    }
+
+    // Controlla se esiste già una ricerca simile recente (ultime 24 ore)
+    if (analysis.similarEcommerce && 
+        analysis.similarEcommerce.analyzedAt) {
+      
+      const lastSearch = new Date(analysis.similarEcommerce.analyzedAt);
+      const now = new Date();
+      const hoursDiff = (now - lastSearch) / (1000 * 60 * 60);
+      
+      if (hoursDiff < 24) {
+        console.log(`📋 Ecommerce simili esistenti per ${analysis.url} (${hoursDiff.toFixed(1)}h fa)`);
+        
+        return res.json({
+          success: true,
+          message: 'Ecommerce simili già trovati',
+          data: {
+            analysis: analysis.getSummary(),
+            similarEcommerce: analysis.similarEcommerce,
+            fromCache: true
+          }
+        });
+      }
+    }
+
+    console.log(`🔍 Inizio ricerca ecommerce simili per ${analysis.url}`);
+
+    try {
+      // Esegui ricerca con Perplexity Deep Research
+      const similarData = await perplexityService.findSimilarEcommerce(
+        analysis.url, 
+        analysis.name || analysis.url
+      );
+
+      console.log(`✅ Ricerca completata: trovati ${similarData.ecommerceList.length} ecommerce simili`);
+
+      // Salva i dati nell'analisi
+      analysis.similarEcommerce = similarData;
+      await analysis.save();
+
+      res.json({
+        success: true,
+        message: `Trovati ${similarData.ecommerceList.length} ecommerce simili`,
+        data: {
+          analysis: analysis.getSummary(),
+          similarEcommerce: similarData,
+          fromCache: false
+        }
+      });
+
+    } catch (perplexityError) {
+      console.error('❌ [SIMILAR ERROR] Errore ricerca Perplexity:', perplexityError.message);
+      console.error('❌ [SIMILAR ERROR] Stack completo:', perplexityError.stack);
+      
+      // Salva errore nell'analisi
+      if (!analysis.errorLogs) analysis.errorLogs = [];
+      analysis.errorLogs.push({
+        message: `Errore ricerca simili: ${perplexityError.message}`,
+        timestamp: new Date()
+      });
+      await analysis.save();
+
+      res.status(500).json({
+        success: false,
+        message: 'Errore nella ricerca di ecommerce simili',
+        error: perplexityError.message
+      });
+    }
+
+  } catch (error) {
+    console.error('❌ [SIMILAR] Errore findSimilarEcommerce:', error);
+    console.error('❌ [SIMILAR] Stack:', error.stack);
+    res.status(500).json({
+      success: false,
+      message: 'Errore interno del server',
+      error: error.message
+    });
+  }
 }; 

@@ -967,6 +967,169 @@ TRUSTPILOT_RECENSIONI: [numero recensioni - rating o "Sconosciuto"]`;
       }
     };
   }
+
+  // Trova ecommerce simili italiani usando Deep Research
+  async findSimilarEcommerce(websiteUrl, websiteName = '') {
+    if (!this.apiKey) {
+      throw new Error('Perplexity API key non configurata');
+    }
+
+    const prompt = this.createSimilarEcommercePrompt(websiteUrl, websiteName);
+    
+    try {
+      console.log(`🔍 Ricerca ecommerce simili per ${websiteUrl} con Perplexity Deep Research`);
+      console.log('📝 PROMPT INVIATO A PERPLEXITY (Deep Research):');
+      console.log('='.repeat(50));
+      console.log(prompt);
+      console.log('='.repeat(50));
+      
+      const response = await axios.post(this.baseUrl, {
+        model: 'sonar-pro', // Deep Research model
+        messages: [
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        max_tokens: 4000,
+        temperature: 0.7,
+        stream: false,
+        search_recency_filter: 'month' // Risultati recenti
+      }, {
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 120000 // 120 secondi per Deep Research
+      });
+
+      console.log('📡 RISPOSTA COMPLETA DA PERPLEXITY (Deep Research):');
+      console.log('='.repeat(50));
+      console.log('Status:', response.status);
+      console.log('Data completa:', JSON.stringify(response.data, null, 2));
+      console.log('='.repeat(50));
+
+      const analysisText = response.data.choices[0].message.content;
+      const citations = response.data.citations || [];
+      
+      console.log('📄 TESTO ANALISI ESTRATTO:');
+      console.log('='.repeat(50));
+      console.log(analysisText);
+      console.log('='.repeat(50));
+      
+      // Parsing della risposta per estrarre gli ecommerce
+      const ecommerceList = this.parseEcommerceResponse(analysisText);
+      
+      console.log('🔧 ECOMMERCE PARSATI:');
+      console.log('='.repeat(50));
+      console.log(JSON.stringify(ecommerceList, null, 2));
+      console.log('='.repeat(50));
+      
+      return {
+        ecommerceList: ecommerceList,
+        rawResponse: analysisText,
+        citations: citations,
+        analyzedAt: new Date()
+      };
+
+    } catch (error) {
+      console.error('❌ Errore chiamata Perplexity Deep Research:', error.response?.data || error.message);
+      throw new Error(`Errore nella ricerca di ecommerce simili: ${error.message}`);
+    }
+  }
+
+  // Crea il prompt per trovare ecommerce simili
+  createSimilarEcommercePrompt(websiteUrl, websiteName) {
+    return `Analizza il sito ecommerce ${websiteUrl} ${websiteName ? `(${websiteName})` : ''} e trova 10 ecommerce italiani simili.
+
+Per ogni ecommerce simile fornisci:
+1. NOME: Nome dell'ecommerce
+2. URL: Sito web completo
+3. DESCRIZIONE: Breve descrizione di cosa vende (max 2-3 righe)
+4. CATEGORIA: Categoria principale dei prodotti
+5. SOMIGLIANZA: Perché è simile al sito analizzato
+
+IMPORTANTE: 
+- Cerca SOLO ecommerce italiani (con sede o focus sul mercato italiano)
+- Fornisci esattamente 10 risultati
+- Assicurati che gli URL siano validi e funzionanti
+- Concentrati su ecommerce realmente attivi e visitabili
+
+Formato della risposta (ripeti per ogni ecommerce da 1 a 10):
+
+ECOMMERCE_1:
+NOME: [Nome ecommerce]
+URL: [https://...]
+DESCRIZIONE: [Breve descrizione]
+CATEGORIA: [Categoria]
+SOMIGLIANZA: [Perché è simile]
+
+ECOMMERCE_2:
+...
+
+Continua fino a ECOMMERCE_10`;
+  }
+
+  // Parsing della risposta per estrarre gli ecommerce
+  parseEcommerceResponse(responseText) {
+    const ecommerceList = [];
+    
+    try {
+      // Cerca pattern ECOMMERCE_N:
+      const ecommerceBlocks = responseText.split(/ECOMMERCE_\d+:/i).slice(1);
+      
+      ecommerceBlocks.forEach((block, index) => {
+        const ecommerce = {
+          rank: index + 1,
+          name: 'N/A',
+          url: '',
+          description: 'N/A',
+          category: 'N/A',
+          similarity: 'N/A'
+        };
+
+        // Estrai NOME
+        const nameMatch = block.match(/NOME:\s*(.+)/i);
+        if (nameMatch) {
+          ecommerce.name = nameMatch[1].trim();
+        }
+
+        // Estrai URL
+        const urlMatch = block.match(/URL:\s*(https?:\/\/[^\s\n]+)/i);
+        if (urlMatch) {
+          ecommerce.url = urlMatch[1].trim();
+        }
+
+        // Estrai DESCRIZIONE
+        const descMatch = block.match(/DESCRIZIONE:\s*(.+?)(?=\n[A-Z]+:|$)/is);
+        if (descMatch) {
+          ecommerce.description = descMatch[1].trim().replace(/\n/g, ' ');
+        }
+
+        // Estrai CATEGORIA
+        const catMatch = block.match(/CATEGORIA:\s*(.+)/i);
+        if (catMatch) {
+          ecommerce.category = catMatch[1].trim();
+        }
+
+        // Estrai SOMIGLIANZA
+        const simMatch = block.match(/SOMIGLIANZA:\s*(.+?)(?=\n\n|$)/is);
+        if (simMatch) {
+          ecommerce.similarity = simMatch[1].trim().replace(/\n/g, ' ');
+        }
+
+        // Aggiungi solo se ha almeno nome e URL
+        if (ecommerce.name !== 'N/A' && ecommerce.url) {
+          ecommerceList.push(ecommerce);
+        }
+      });
+
+    } catch (error) {
+      console.error('❌ Errore parsing risposta ecommerce simili:', error);
+    }
+
+    return ecommerceList;
+  }
 }
 
 module.exports = new PerplexityService(); 
