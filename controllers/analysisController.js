@@ -738,11 +738,30 @@ exports.findSimilarEcommerce = async (req, res) => {
 
     console.log(`🔍 Inizio ricerca ecommerce simili per ${analysis.url}`);
 
-    // Crea record SimilarLeads
+    // Genera query Google PRIMA di creare il record
+    console.log('📝 Generazione query Google...');
+    let googleQuery;
+    try {
+      googleQuery = await perplexityService.generateGoogleQuery(
+        analysis.url,
+        analysis.name,
+        analysis.vertical || analysis.category
+      );
+      console.log(`✅ Query generata: "${googleQuery}"`);
+    } catch (queryError) {
+      console.error('❌ Errore generazione query:', queryError);
+      return res.status(500).json({
+        success: false,
+        message: 'Errore nella generazione della query Google',
+        error: queryError.message
+      });
+    }
+
+    // Crea record SimilarLeads con la query già popolata
     const similarLeads = new SimilarLeads({
       originalAnalysis: analysisId,
       generatedBy: userId,
-      searchQuery: '', // Verrà popolato dopo
+      searchQuery: googleQuery,
       status: 'processing',
       processingTime: {
         startedAt: new Date()
@@ -756,12 +775,13 @@ exports.findSimilarEcommerce = async (req, res) => {
       message: 'Ricerca avviata. Il processo continuerà in background.',
       data: {
         leadsId: similarLeads._id,
-        status: 'processing'
+        status: 'processing',
+        searchQuery: googleQuery // Includi la query nella risposta
       }
     });
 
     // Processo asincrono in background
-    processLeadsSearch(similarLeads._id, analysis, userId).catch(err => {
+    processLeadsSearch(similarLeads._id, analysis, userId, googleQuery).catch(err => {
       console.error('❌ Errore processo leads:', err);
     });
 
@@ -776,34 +796,23 @@ exports.findSimilarEcommerce = async (req, res) => {
 };
 
 // Processo asincrono per la ricerca dei leads
-async function processLeadsSearch(leadsId, analysis, userId) {
+async function processLeadsSearch(leadsId, analysis, userId, googleQuery) {
   const similarLeads = await SimilarLeads.findById(leadsId);
   
   try {
     console.log(`🚀 Inizio processo leads per ${analysis.url}`);
+    console.log(`📝 Query Google: "${googleQuery}"`);
 
-    // 1. Genera query Google con Perplexity
-    console.log('📝 Step 1: Generazione query Google...');
-    const googleQuery = await perplexityService.generateGoogleQuery(
-      analysis.url,
-      analysis.name,
-      analysis.vertical || analysis.category
-    );
-    
-    similarLeads.searchQuery = googleQuery;
-    await similarLeads.save();
-    console.log(`✅ Query generata: "${googleQuery}"`);
-
-    // 2. Esegui Google Search con Apify
-    console.log('🔍 Step 2: Google Search...');
+    // 1. Esegui Google Search con Apify
+    console.log('🔍 Step 1: Google Search...');
     const searchResults = await apifyService.googleSearch(googleQuery);
     console.log(`✅ Trovati ${searchResults.length} risultati da Google`);
     
     similarLeads.searchStats.totalUrlsFound = searchResults.length;
     await similarLeads.save();
 
-    // 3. Analizza ogni URL e filtra
-    console.log('📊 Step 3: Analisi e filtraggio URLs...');
+    // 2. Analizza ogni URL e filtra
+    console.log('📊 Step 2: Analisi e filtraggio URLs...');
     const leads = [];
     
     for (const result of searchResults) {
@@ -896,7 +905,7 @@ async function processLeadsSearch(leadsId, analysis, userId) {
       }
     }
 
-    // 4. Salva risultati finali
+    // 3. Salva risultati finali
     similarLeads.leads = leads;
     similarLeads.status = 'completed';
     similarLeads.processingTime.completedAt = new Date();
