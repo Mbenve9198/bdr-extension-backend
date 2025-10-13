@@ -993,7 +993,7 @@ Rispondi SOLO con la query Google, senza spiegazioni o altro testo.`;
       console.log(`🔍 Generazione query Google per ${websiteUrl}`);
       
       const response = await axios.post(this.baseUrl, {
-        model: 'llama-3.1-sonar-small-128k-online', // Modello semplice
+        model: 'sonar', // Modello semplice e veloce
         messages: [
           {
             role: 'user',
