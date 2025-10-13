@@ -968,59 +968,6 @@ TRUSTPILOT_RECENSIONI: [numero recensioni - rating o "Sconosciuto"]`;
     };
   }
 
-  // Genera query Google per ecommerce simili usando modello semplice
-  async generateGoogleQuery(websiteUrl, websiteName = '', websiteCategory = '') {
-    if (!this.apiKey) {
-      throw new Error('Perplexity API key non configurata');
-    }
-
-    const prompt = `Analizza il sito ecommerce ${websiteUrl} ${websiteName ? `(${websiteName})` : ''} ${websiteCategory ? `nella categoria ${websiteCategory}` : ''}.
-
-Genera una query di ricerca Google specifica e concisa per trovare ecommerce italiani simili. La query deve essere:
-- In italiano
-- Molto specifica sui prodotti venduti
-- Max 3-5 parole chiave
-- Ottimizzata per trovare ecommerce italiani simili
-
-Esempi:
-- Se vende scarpe artigianali → "scarpe artigianali italiane"
-- Se vende gioielli fatti a mano → "gioielli artigianali made in italy"
-- Se vende cosmetici bio → "cosmetici biologici naturali"
-
-Rispondi SOLO con la query Google, senza spiegazioni o altro testo.`;
-    
-    try {
-      console.log(`🔍 Generazione query Google per ${websiteUrl}`);
-      
-      const response = await axios.post(this.baseUrl, {
-        model: 'sonar', // Modello semplice e veloce
-        messages: [
-          {
-            role: 'user',
-            content: prompt
-          }
-        ],
-        max_tokens: 100,
-        temperature: 0.3
-      }, {
-        headers: {
-          'Authorization': `Bearer ${this.apiKey}`,
-          'Content-Type': 'application/json'
-        },
-        timeout: 15000 // 15 secondi
-      });
-
-      const query = response.data.choices[0].message.content.trim();
-      console.log(`✅ Query Google generata: "${query}"`);
-      
-      return query;
-
-    } catch (error) {
-      console.error('❌ Errore generazione query Google:', error.response?.data || error.message);
-      throw new Error(`Errore nella generazione della query Google: ${error.message}`);
-    }
-  }
-
   // Trova ecommerce simili italiani usando Deep Research
   async findSimilarEcommerce(websiteUrl, websiteName = '') {
     if (!this.apiKey) {

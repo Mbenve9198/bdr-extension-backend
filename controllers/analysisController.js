@@ -6,6 +6,70 @@ const apifyService = require('../services/apifyService');
 const perplexityService = require('../services/perplexityService');
 const { validationResult } = require('express-validator');
 
+// Marketplace da escludere
+const MARKETPLACE_BLACKLIST = [
+  'amazon', 'ebay', 'etsy', 'zalando', 'asos', 'wish', 'aliexpress',
+  'subito', 'vinted', 'wallapop', 'shein', 'temu', 'privalia',
+  'yoox', 'farfetch', 'spartoo', 'eprice', 'trovaprezzi'
+];
+
+// Helper: Pulisce la query Google dalle spiegazioni
+function cleanGoogleQuery(rawQuery) {
+  if (!rawQuery) return '';
+  
+  // Rimuovi virgolette multiple
+  let cleaned = rawQuery.replace(/^["']+|["']+$/g, '');
+  
+  // Cerca pattern tipo: "testo esplicativo: "query vera""
+  const match = cleaned.match(/["']([^"']+)["']\s*$/);
+  if (match) {
+    cleaned = match[1];
+  }
+  
+  // Se contiene "non essendo disponibili" o frasi simili, estrai solo la query tra virgolette
+  if (cleaned.toLowerCase().includes('non essendo') || 
+      cleaned.toLowerCase().includes('potrebb') ||
+      cleaned.toLowerCase().includes('generica')) {
+    const queryMatch = cleaned.match(/["']([^"']+)["']/g);
+    if (queryMatch && queryMatch.length > 0) {
+      // Prendi l'ultima query tra virgolette
+      cleaned = queryMatch[queryMatch.length - 1].replace(/["']/g, '');
+    }
+  }
+  
+  // Rimuovi eventuali spiegazioni finali
+  cleaned = cleaned.split(/\n/)[0].trim();
+  cleaned = cleaned.replace(/^["']+|["']+$/g, '');
+  
+  return cleaned;
+}
+
+// Helper: Estrae dominio pulito da URL
+function extractCleanDomain(url) {
+  try {
+    // Se l'URL contiene similarweb, estrai il vero dominio
+    if (url.includes('similarweb.com/website/')) {
+      const match = url.match(/similarweb\.com\/website\/([^\/\?]+)/i);
+      if (match) {
+        return match[1].toLowerCase();
+      }
+    }
+    
+    // Altrimenti estrai normalmente
+    const urlObj = new URL(url);
+    return urlObj.hostname.replace(/^www\./i, '').toLowerCase();
+  } catch (error) {
+    console.error('Errore estrazione dominio:', error);
+    return url.toLowerCase();
+  }
+}
+
+// Helper: Controlla se è un marketplace
+function isMarketplace(url) {
+  const domain = extractCleanDomain(url);
+  return MARKETPLACE_BLACKLIST.some(marketplace => domain.includes(marketplace));
+}
+
 // Analizza un singolo ecommerce
 exports.analyzeEcommerce = async (req, res) => {
   try {
@@ -725,29 +789,47 @@ exports.findSimilarEcommerce = async (req, res) => {
     if (existingLeads && existingLeads.status === 'completed') {
       const hoursDiff = (new Date() - existingLeads.createdAt) / (1000 * 60 * 60);
       console.log(`📋 Leads esistenti per ${analysis.url} (${hoursDiff.toFixed(1)}h fa)`);
-      
-      return res.json({
-        success: true,
+        
+        return res.json({
+          success: true,
         message: 'Leads già generati',
-        data: {
+          data: {
           leads: existingLeads,
-          fromCache: true
-        }
-      });
+            fromCache: true
+          }
+        });
     }
 
     console.log(`🔍 Inizio ricerca ecommerce simili per ${analysis.url}`);
+
+    // Estrai URL reale (rimuovi similarweb se presente)
+    let realUrl = analysis.url;
+    if (realUrl.includes('similarweb.com/website/')) {
+      const match = realUrl.match(/similarweb\.com\/website\/([^\/\?]+)/i);
+      if (match) {
+        realUrl = `https://${match[1]}`;
+        console.log(`🔧 URL corretto da SimilarWeb: ${realUrl}`);
+      }
+    }
 
     // Genera query Google PRIMA di creare il record
     console.log('📝 Generazione query Google...');
     let googleQuery;
     try {
       googleQuery = await perplexityService.generateGoogleQuery(
-        analysis.url,
+        realUrl,
         analysis.name,
         analysis.vertical || analysis.category
       );
-      console.log(`✅ Query generata: "${googleQuery}"`);
+      console.log(`✅ Query raw generata: "${googleQuery}"`);
+      
+      // Pulisci la query dalle spiegazioni
+      googleQuery = cleanGoogleQuery(googleQuery);
+      console.log(`✅ Query pulita: "${googleQuery}"`);
+      
+      if (!googleQuery || googleQuery.length < 3) {
+        throw new Error('Query Google non valida o troppo corta');
+      }
     } catch (queryError) {
       console.error('❌ Errore generazione query:', queryError);
       return res.status(500).json({
@@ -770,10 +852,10 @@ exports.findSimilarEcommerce = async (req, res) => {
     await similarLeads.save();
 
     // Risposta immediata al client
-    res.json({
-      success: true,
+      res.json({
+        success: true,
       message: 'Ricerca avviata. Il processo continuerà in background.',
-      data: {
+        data: {
         leadsId: similarLeads._id,
         status: 'processing',
         searchQuery: googleQuery // Includi la query nella risposta
@@ -814,13 +896,49 @@ async function processLeadsSearch(leadsId, analysis, userId, googleQuery) {
     // 2. Analizza ogni URL e filtra
     console.log('📊 Step 2: Analisi e filtraggio URLs...');
     const leads = [];
+    const analyzedDomains = new Set(); // Track domini già analizzati
     
     for (const result of searchResults) {
       try {
-        console.log(`  🔍 Analizzo: ${result.url}`);
+        // Estrai dominio pulito
+        const domain = extractCleanDomain(result.url);
         
-        // Analizza con SimilarWeb tramite Apify
-        const apifyData = await apifyService.runAnalysis(result.url);
+        // Skip marketplace
+        if (isMarketplace(result.url)) {
+          console.log(`  ⛔ Saltato marketplace: ${domain}`);
+          continue;
+        }
+        
+        // Skip se dominio già analizzato in questa ricerca
+        if (analyzedDomains.has(domain)) {
+          console.log(`  ⏭️ Dominio già analizzato: ${domain}`);
+          continue;
+        }
+        
+        console.log(`  🔍 Analizzo: ${result.url} (dominio: ${domain})`);
+        
+        // Cerca analisi esistente nel database per questo dominio
+        const existingAnalysis = await EcommerceAnalysis.findOne({
+          $or: [
+            { url: { $regex: domain.replace(/\./g, '\\.'), $options: 'i' } }
+          ],
+          status: 'completed'
+        }).sort({ createdAt: -1 });
+        
+        let apifyData;
+        let fromExistingAnalysis = false;
+        
+        if (existingAnalysis) {
+          console.log(`  📋 Trovata analisi esistente per ${domain}`);
+          apifyData = existingAnalysis.toObject();
+          fromExistingAnalysis = true;
+        } else {
+          // Analizza con SimilarWeb tramite Apify
+          apifyData = await apifyService.runAnalysis(result.url);
+        }
+        
+        // Aggiungi dominio ai già analizzati
+        analyzedDomains.add(domain);
         
         // Calcola spedizioni per paese
         const shipmentsByCountry = [];
@@ -855,13 +973,19 @@ async function processLeadsSearch(leadsId, analysis, userId, googleQuery) {
         );
         
         if (qualifies) {
-          leads.push({
-            url: apifyData.url,
+          // Verifica se il lead esiste già in altri record (anche di altri utenti)
+          const existingLead = await SimilarLeads.findOne({
+            'leads.url': result.url,
+            status: 'completed'
+          }).populate('generatedBy', 'firstName lastName username');
+          
+          const leadData = {
+            url: result.url, // Usa URL originale Google Search, non quello di SimilarWeb
             name: apifyData.name,
             title: result.title,
             description: result.description,
             category: apifyData.category,
-            averageMonthlyVisits: apifyData.calculatedMetrics.averageMonthlyVisits,
+            averageMonthlyVisits: apifyData.calculatedMetrics?.averageMonthlyVisits || 0,
             shipmentsByCountry: shipmentsByCountry,
             totalMonthlyShipments: totalMonthlyShipments,
             monthlyShipmentsItaly: monthlyShipmentsItaly,
@@ -870,9 +994,18 @@ async function processLeadsSearch(leadsId, analysis, userId, googleQuery) {
             googleSearchDescription: result.description,
             analysisStatus: 'analyzed',
             analyzedAt: new Date()
-          });
+          };
           
-          console.log(`  ✅ Lead qualificato: ${apifyData.name} (IT: ${monthlyShipmentsItaly}, Estero: ${monthlyShipmentsAbroad})`);
+          // Aggiungi nota se già presente in altri lead
+          if (existingLead && fromExistingAnalysis) {
+            leadData.notes = `Lead già presente in ricerca di ${existingLead.generatedBy?.firstName || 'altro utente'}`;
+          } else if (fromExistingAnalysis) {
+            leadData.notes = 'Analisi riutilizzata dal database';
+          }
+          
+          leads.push(leadData);
+          
+          console.log(`  ✅ Lead qualificato: ${apifyData.name} (IT: ${monthlyShipmentsItaly}, Estero: ${monthlyShipmentsAbroad})${fromExistingAnalysis ? ' [RIUSATO]' : ''}`);
         } else {
           console.log(`  ❌ Non qualificato: IT: ${monthlyShipmentsItaly}, Estero: ${monthlyShipmentsAbroad}`);
         }
@@ -922,8 +1055,8 @@ async function processLeadsSearch(leadsId, analysis, userId, googleQuery) {
     similarLeads.status = 'failed';
     similarLeads.errorLogs.push({
       message: error.message,
-      timestamp: new Date()
-    });
+        timestamp: new Date()
+      });
     similarLeads.processingTime.completedAt = new Date();
     await similarLeads.save();
   }
@@ -962,8 +1095,8 @@ exports.getSimilarLeads = async (req, res) => {
 
   } catch (error) {
     console.error('❌ Errore getSimilarLeads:', error);
-    res.status(500).json({
-      success: false,
+      res.status(500).json({
+        success: false,
       message: 'Errore interno del server'
     });
   }

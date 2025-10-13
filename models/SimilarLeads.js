@@ -78,7 +78,10 @@ const similarLeadsSchema = new mongoose.Schema({
     analyzedAt: Date,
     
     // Errori eventuali
-    error: String
+    error: String,
+    
+    // Note aggiuntive
+    notes: String
   }],
   
   // Statistiche della ricerca
