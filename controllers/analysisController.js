@@ -134,6 +134,7 @@ exports.analyzeEcommerce = async (req, res) => {
       prospect: prospectId,
       analyzedBy: userId,
       url: url.toLowerCase(),
+      originalUrl: url.toLowerCase(), // Salva URL originale prima che Apify lo sovrascriva
       status: 'processing'
     });
 
@@ -800,24 +801,16 @@ exports.findSimilarEcommerce = async (req, res) => {
         });
     }
 
-    console.log(`🔍 Inizio ricerca ecommerce simili per ${analysis.url}`);
-
-    // Estrai URL reale (rimuovi similarweb se presente)
-    let realUrl = analysis.url;
-    if (realUrl.includes('similarweb.com/website/')) {
-      const match = realUrl.match(/similarweb\.com\/website\/([^\/\?]+)/i);
-      if (match) {
-        realUrl = `https://${match[1]}`;
-        console.log(`🔧 URL corretto da SimilarWeb: ${realUrl}`);
-      }
-    }
+    // Usa URL originale (quello rilevato dall'estensione)
+    const urlForQuery = analysis.originalUrl || analysis.url;
+    console.log(`🔍 Inizio ricerca ecommerce simili per ${urlForQuery}`);
 
     // Genera query Google PRIMA di creare il record
     console.log('📝 Generazione query Google...');
     let googleQuery;
     try {
       googleQuery = await perplexityService.generateGoogleQuery(
-        realUrl,
+        urlForQuery,
         analysis.name,
         analysis.vertical || analysis.category
       );

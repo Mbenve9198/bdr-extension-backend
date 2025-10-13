@@ -100,6 +100,7 @@ const ecommerceAnalysisSchema = new mongoose.Schema({
   
   // Dati base del sito
   url: { type: String, required: true },
+  originalUrl: { type: String }, // URL originale prima di Apify/SimilarWeb
   name: { type: String },
   title: { type: String },
   description: { type: String },
