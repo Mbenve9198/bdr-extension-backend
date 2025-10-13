@@ -1,6 +1,7 @@
 const EcommerceAnalysis = require('../models/EcommerceAnalysis');
 const Prospect = require('../models/Prospect');
 const User = require('../models/User');
+const SimilarLeads = require('../models/SimilarLeads');
 const apifyService = require('../services/apifyService');
 const perplexityService = require('../services/perplexityService');
 const { validationResult } = require('express-validator');
@@ -686,7 +687,7 @@ exports.generatePerplexityAnalysis = async (req, res) => {
   }
 };
 
-// Trova ecommerce italiani simili usando Perplexity Deep Research
+// Trova ecommerce italiani simili usando Google Search + Filtri
 exports.findSimilarEcommerce = async (req, res) => {
   console.log('🔍 [SIMILAR] Richiesta ricerca ecommerce simili - ID:', req.params.id);
   
@@ -715,80 +716,296 @@ exports.findSimilarEcommerce = async (req, res) => {
       });
     }
 
-    // Controlla se esiste già una ricerca simile recente (ultime 24 ore)
-    if (analysis.similarEcommerce && 
-        analysis.similarEcommerce.analyzedAt) {
+    // Controlla se esiste già una ricerca recente (ultime 24 ore)
+    const existingLeads = await SimilarLeads.findOne({
+      originalAnalysis: analysisId,
+      createdAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) }
+    }).sort({ createdAt: -1 });
+
+    if (existingLeads && existingLeads.status === 'completed') {
+      const hoursDiff = (new Date() - existingLeads.createdAt) / (1000 * 60 * 60);
+      console.log(`📋 Leads esistenti per ${analysis.url} (${hoursDiff.toFixed(1)}h fa)`);
       
-      const lastSearch = new Date(analysis.similarEcommerce.analyzedAt);
-      const now = new Date();
-      const hoursDiff = (now - lastSearch) / (1000 * 60 * 60);
-      
-      if (hoursDiff < 24) {
-        console.log(`📋 Ecommerce simili esistenti per ${analysis.url} (${hoursDiff.toFixed(1)}h fa)`);
-        
-        return res.json({
-          success: true,
-          message: 'Ecommerce simili già trovati',
-          data: {
-            analysis: analysis.getSummary(),
-            similarEcommerce: analysis.similarEcommerce,
-            fromCache: true
-          }
-        });
-      }
+      return res.json({
+        success: true,
+        message: 'Leads già generati',
+        data: {
+          leads: existingLeads,
+          fromCache: true
+        }
+      });
     }
 
     console.log(`🔍 Inizio ricerca ecommerce simili per ${analysis.url}`);
 
-    try {
-      // Esegui ricerca con Perplexity Deep Research
-      const similarData = await perplexityService.findSimilarEcommerce(
-        analysis.url, 
-        analysis.name || analysis.url
-      );
+    // Crea record SimilarLeads
+    const similarLeads = new SimilarLeads({
+      originalAnalysis: analysisId,
+      generatedBy: userId,
+      searchQuery: '', // Verrà popolato dopo
+      status: 'processing',
+      processingTime: {
+        startedAt: new Date()
+      }
+    });
+    await similarLeads.save();
 
-      console.log(`✅ Ricerca completata: trovati ${similarData.ecommerceList.length} ecommerce simili`);
+    // Risposta immediata al client
+    res.json({
+      success: true,
+      message: 'Ricerca avviata. Il processo continuerà in background.',
+      data: {
+        leadsId: similarLeads._id,
+        status: 'processing'
+      }
+    });
 
-      // Salva i dati nell'analisi
-      analysis.similarEcommerce = similarData;
-      await analysis.save();
-
-      res.json({
-        success: true,
-        message: `Trovati ${similarData.ecommerceList.length} ecommerce simili`,
-        data: {
-          analysis: analysis.getSummary(),
-          similarEcommerce: similarData,
-          fromCache: false
-        }
-      });
-
-    } catch (perplexityError) {
-      console.error('❌ [SIMILAR ERROR] Errore ricerca Perplexity:', perplexityError.message);
-      console.error('❌ [SIMILAR ERROR] Stack completo:', perplexityError.stack);
-      
-      // Salva errore nell'analisi
-      if (!analysis.errorLogs) analysis.errorLogs = [];
-      analysis.errorLogs.push({
-        message: `Errore ricerca simili: ${perplexityError.message}`,
-        timestamp: new Date()
-      });
-      await analysis.save();
-
-      res.status(500).json({
-        success: false,
-        message: 'Errore nella ricerca di ecommerce simili',
-        error: perplexityError.message
-      });
-    }
+    // Processo asincrono in background
+    processLeadsSearch(similarLeads._id, analysis, userId).catch(err => {
+      console.error('❌ Errore processo leads:', err);
+    });
 
   } catch (error) {
     console.error('❌ [SIMILAR] Errore findSimilarEcommerce:', error);
-    console.error('❌ [SIMILAR] Stack:', error.stack);
     res.status(500).json({
       success: false,
       message: 'Errore interno del server',
       error: error.message
+    });
+  }
+};
+
+// Processo asincrono per la ricerca dei leads
+async function processLeadsSearch(leadsId, analysis, userId) {
+  const similarLeads = await SimilarLeads.findById(leadsId);
+  
+  try {
+    console.log(`🚀 Inizio processo leads per ${analysis.url}`);
+
+    // 1. Genera query Google con Perplexity
+    console.log('📝 Step 1: Generazione query Google...');
+    const googleQuery = await perplexityService.generateGoogleQuery(
+      analysis.url,
+      analysis.name,
+      analysis.vertical || analysis.category
+    );
+    
+    similarLeads.searchQuery = googleQuery;
+    await similarLeads.save();
+    console.log(`✅ Query generata: "${googleQuery}"`);
+
+    // 2. Esegui Google Search con Apify
+    console.log('🔍 Step 2: Google Search...');
+    const searchResults = await apifyService.googleSearch(googleQuery);
+    console.log(`✅ Trovati ${searchResults.length} risultati da Google`);
+    
+    similarLeads.searchStats.totalUrlsFound = searchResults.length;
+    await similarLeads.save();
+
+    // 3. Analizza ogni URL e filtra
+    console.log('📊 Step 3: Analisi e filtraggio URLs...');
+    const leads = [];
+    
+    for (const result of searchResults) {
+      try {
+        console.log(`  🔍 Analizzo: ${result.url}`);
+        
+        // Analizza con SimilarWeb tramite Apify
+        const apifyData = await apifyService.runAnalysis(result.url);
+        
+        // Calcola spedizioni per paese
+        const shipmentsByCountry = [];
+        let monthlyShipmentsItaly = 0;
+        let monthlyShipmentsAbroad = 0;
+        
+        for (const country of apifyData.topCountries || []) {
+          const countryShipments = country.estimatedShipments || 0;
+          
+          shipmentsByCountry.push({
+            countryName: country.countryName,
+            countryCode: country.countryCode,
+            monthlyShipments: countryShipments,
+            monthlyVisits: country.estimatedVisits || 0,
+            visitsShare: country.visitsShare || 0
+          });
+          
+          // Distingui Italia vs Estero
+          if (country.countryCode === 'IT' || country.countryName.toLowerCase().includes('ital')) {
+            monthlyShipmentsItaly += countryShipments;
+          } else {
+            monthlyShipmentsAbroad += countryShipments;
+          }
+        }
+        
+        const totalMonthlyShipments = monthlyShipmentsItaly + monthlyShipmentsAbroad;
+        
+        // Applica filtri
+        const qualifies = (
+          (monthlyShipmentsItaly >= 100 || monthlyShipmentsAbroad >= 30) &&
+          monthlyShipmentsItaly <= 10000
+        );
+        
+        if (qualifies) {
+          leads.push({
+            url: apifyData.url,
+            name: apifyData.name,
+            title: result.title,
+            description: result.description,
+            category: apifyData.category,
+            averageMonthlyVisits: apifyData.calculatedMetrics.averageMonthlyVisits,
+            shipmentsByCountry: shipmentsByCountry,
+            totalMonthlyShipments: totalMonthlyShipments,
+            monthlyShipmentsItaly: monthlyShipmentsItaly,
+            monthlyShipmentsAbroad: monthlyShipmentsAbroad,
+            googleSearchPosition: result.position,
+            googleSearchDescription: result.description,
+            analysisStatus: 'analyzed',
+            analyzedAt: new Date()
+          });
+          
+          console.log(`  ✅ Lead qualificato: ${apifyData.name} (IT: ${monthlyShipmentsItaly}, Estero: ${monthlyShipmentsAbroad})`);
+        } else {
+          console.log(`  ❌ Non qualificato: IT: ${monthlyShipmentsItaly}, Estero: ${monthlyShipmentsAbroad}`);
+        }
+        
+        similarLeads.searchStats.totalUrlsAnalyzed++;
+        if (qualifies) {
+          similarLeads.searchStats.totalUrlsQualified++;
+        }
+        
+      } catch (urlError) {
+        console.error(`  ❌ Errore analisi ${result.url}:`, urlError.message);
+        
+        // Aggiungi lead con errore
+        leads.push({
+          url: result.url,
+          title: result.title,
+          description: result.description,
+          googleSearchPosition: result.position,
+          analysisStatus: 'failed',
+          error: urlError.message
+        });
+        
+        similarLeads.searchStats.totalUrlsFailed++;
+      }
+      
+      // Salva progress ogni 5 URLs
+      if (leads.length % 5 === 0) {
+        similarLeads.leads = leads;
+        await similarLeads.save();
+      }
+    }
+
+    // 4. Salva risultati finali
+    similarLeads.leads = leads;
+    similarLeads.status = 'completed';
+    similarLeads.processingTime.completedAt = new Date();
+    similarLeads.processingTime.durationMs = 
+      similarLeads.processingTime.completedAt - similarLeads.processingTime.startedAt;
+    
+    await similarLeads.save();
+    
+    console.log(`✅ Processo completato: ${similarLeads.searchStats.totalUrlsQualified} leads qualificati`);
+
+  } catch (error) {
+    console.error('❌ Errore processo leads:', error);
+    
+    similarLeads.status = 'failed';
+    similarLeads.errorLogs.push({
+      message: error.message,
+      timestamp: new Date()
+    });
+    similarLeads.processingTime.completedAt = new Date();
+    await similarLeads.save();
+  }
+}
+
+// Ottieni risultati ricerca leads
+exports.getSimilarLeads = async (req, res) => {
+  try {
+    const { leadsId } = req.params;
+    const userId = req.user._id;
+
+    const leads = await SimilarLeads.findById(leadsId)
+      .populate('originalAnalysis', 'url name')
+      .populate('generatedBy', 'firstName lastName username');
+
+    if (!leads) {
+      return res.status(404).json({
+        success: false,
+        message: 'Leads non trovati'
+      });
+    }
+
+    // Controlla permessi
+    if (leads.generatedBy._id.toString() !== userId.toString() && 
+        !['admin', 'manager'].includes(req.user.role)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Accesso negato'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: leads
+    });
+
+  } catch (error) {
+    console.error('❌ Errore getSimilarLeads:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Errore interno del server'
+    });
+  }
+};
+
+// Lista tutti i leads dell'utente
+exports.getMyLeadsList = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const {
+      page = 1,
+      limit = 10,
+      status
+    } = req.query;
+
+    const query = {};
+    
+    // Filtro per ruolo utente
+    if (req.user.role === 'bdr') {
+      query.generatedBy = userId;
+    }
+
+    if (status) query.status = status;
+
+    const skip = (page - 1) * limit;
+
+    const [leadsList, total] = await Promise.all([
+      SimilarLeads.find(query)
+        .populate('originalAnalysis', 'url name')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(parseInt(limit)),
+      SimilarLeads.countDocuments(query)
+    ]);
+
+    res.json({
+      success: true,
+      data: leadsList.map(l => l.getSummary()),
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        pages: Math.ceil(total / limit)
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Errore getMyLeadsList:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Errore interno del server'
     });
   }
 }; 

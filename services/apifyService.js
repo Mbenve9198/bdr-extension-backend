@@ -4,6 +4,7 @@ class ApifyService {
   constructor() {
     this.apiToken = process.env.APIFY_TOKEN;
     this.actorId = 'tri_angle~fast-similarweb-scraper';
+    this.googleSearchActorId = 'apify~google-search-scraper';
     this.baseUrl = 'https://api.apify.com/v2';
   }
 
@@ -248,6 +249,78 @@ class ApifyService {
     } catch (error) {
       throw new Error(`URL non valido: ${error.message}`);
     }
+  }
+
+  // Metodo per Google Search con Apify
+  async googleSearch(query, options = {}) {
+    try {
+      console.log(`🔍 Google Search con Apify per query: "${query}"`);
+      
+      const input = {
+        queries: query,
+        maxPagesPerQuery: 5, // ~10 risultati per pagina = ~50 risultati totali
+        resultsPerPage: 10,
+        countryCode: 'it',
+        languageCode: 'it',
+        mobileResults: false,
+        includeUnfilteredResults: false,
+        saveHtml: false,
+        saveHtmlToKeyValueStore: false,
+        ...options
+      };
+
+      const response = await axios.post(
+        `${this.baseUrl}/acts/${this.googleSearchActorId}/run-sync-get-dataset-items`,
+        input,
+        {
+          headers: {
+            'Authorization': `Bearer ${this.apiToken}`,
+            'Content-Type': 'application/json'
+          },
+          params: {
+            token: this.apiToken
+          },
+          timeout: 180000 // 3 minuti timeout per Google Search
+        }
+      );
+
+      if (response.data && response.data.length > 0) {
+        console.log(`✅ Google Search completata: ${response.data.length} risultati`);
+        return this.processGoogleSearchResults(response.data);
+      } else {
+        console.log('⚠️  Nessun risultato dalla Google Search');
+        return [];
+      }
+
+    } catch (error) {
+      console.error(`❌ Errore Google Search Apify:`, error.message);
+      throw this.handleApifyError(error);
+    }
+  }
+
+  // Processa i risultati di Google Search
+  processGoogleSearchResults(rawResults) {
+    const processedResults = [];
+    
+    for (const result of rawResults) {
+      if (result.organicResults && Array.isArray(result.organicResults)) {
+        for (const organic of result.organicResults) {
+          if (organic.url) {
+            processedResults.push({
+              title: organic.title || '',
+              url: organic.url,
+              displayedUrl: organic.displayedUrl || '',
+              description: organic.description || '',
+              position: organic.position || 0,
+              emphasizedKeywords: organic.emphasizedKeywords || []
+            });
+          }
+        }
+      }
+    }
+    
+    console.log(`✅ Processati ${processedResults.length} URL organici da Google Search`);
+    return processedResults;
   }
 
   // Metodo per ottenere statistiche sull'uso dell'API Apify
