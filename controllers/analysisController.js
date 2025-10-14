@@ -1462,10 +1462,18 @@ async function processLeadAnalysis(leadsId, leadIndex, url) {
       console.log(`✅ Lead qualificato: ${url} (ITA: ${monthlyShipmentsItaly}, EST: ${monthlyShipmentsAbroad})`);
       
       // NUOVO: Estrai automaticamente email e telefono con Gemini
-      console.log(`📞 Estrazione automatica contatti per lead qualificato...`);
+      console.log(`\n📞 ========== INIZIO ESTRAZIONE CONTATTI GEMINI ==========`);
+      console.log(`📞 URL: ${url}`);
+      console.log(`📞 Nome sito: ${lead.name || 'N/A'}`);
+      
       try {
+        console.log(`📞 Step 1: Require geminiService...`);
         const geminiService = require('../services/geminiService');
+        console.log(`📞 Step 2: geminiService caricato:`, typeof geminiService);
+        
+        console.log(`📞 Step 3: Chiamata extractMainContact...`);
         const contacts = await geminiService.extractMainContact(url, lead.name);
+        console.log(`📞 Step 4: Risposta ricevuta:`, contacts);
         
         if (contacts.email || contacts.phone) {
           lead.contacts = {
@@ -1474,14 +1482,19 @@ async function processLeadAnalysis(leadsId, leadIndex, url) {
             extractedAt: new Date(),
             source: 'gemini_auto'
           };
-          console.log(`✅ Contatti salvati: ${contacts.email || 'N/A'} | ${contacts.phone || 'N/A'}`);
+          console.log(`✅ Contatti salvati nel lead: ${contacts.email || 'N/A'} | ${contacts.phone || 'N/A'}`);
         } else {
           console.log(`⚠️  Nessun contatto trovato per ${url}`);
         }
       } catch (contactError) {
-        console.error(`❌ Errore estrazione contatti: ${contactError.message}`);
+        console.error(`❌ ERRORE COMPLETO estrazione contatti:`);
+        console.error(`   Messaggio: ${contactError.message}`);
+        console.error(`   Stack: ${contactError.stack}`);
+        console.error(`   Tipo errore:`, contactError.constructor.name);
         // Non bloccare il processo se l'estrazione fallisce
       }
+      
+      console.log(`📞 ========== FINE ESTRAZIONE CONTATTI GEMINI ==========\n`);
     } else {
       console.log(`❌ Lead NON qualificato: ${url} (ITA: ${monthlyShipmentsItaly}, EST: ${monthlyShipmentsAbroad})`);
     }

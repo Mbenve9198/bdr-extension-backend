@@ -117,12 +117,19 @@ NON aggiungere spiegazioni, SOLO il JSON.`;
    * @returns {Promise<{email: string|null, phone: string|null}>}
    */
   async extractMainContact(url, siteName = '') {
+    console.log(`\n🤖 [GEMINI] extractMainContact chiamata`);
+    console.log(`🤖 [GEMINI] URL: ${url}`);
+    console.log(`🤖 [GEMINI] Site Name: ${siteName}`);
+    console.log(`🤖 [GEMINI] API Key presente: ${!!this.apiKey}`);
+    console.log(`🤖 [GEMINI] AI instance presente: ${!!this.ai}`);
+    
     if (!this.apiKey) {
+      console.error(`❌ [GEMINI] API key mancante!`);
       throw new Error('Gemini API key non configurata');
     }
 
     try {
-      console.log(`📞 Gemini: estrazione contatto principale per ${url}`);
+      console.log(`📞 [GEMINI] Preparazione prompt...`);
 
       // Prompt ottimizzato per trovare solo contatti principali
       const prompt = `Visita mentalmente il sito ${url} ${siteName ? `(${siteName})` : ''} e trova i contatti principali dell'azienda.
@@ -152,6 +159,10 @@ Se non trovi uno dei due, usa null:
 
 NON aggiungere spiegazioni, SOLO il JSON.`;
 
+      console.log(`📤 [GEMINI] Invio richiesta API...`);
+      console.log(`📤 [GEMINI] Model: gemini-2.5-flash`);
+      console.log(`📤 [GEMINI] Prompt length: ${prompt.length} caratteri`);
+      
       const response = await this.ai.models.generateContent({
         model: 'gemini-2.5-flash',
         contents: prompt,
@@ -164,8 +175,9 @@ NON aggiungere spiegazioni, SOLO il JSON.`;
         }
       });
 
+      console.log(`📥 [GEMINI] Risposta ricevuta!`);
       const rawText = response.text.trim();
-      console.log(`📥 Risposta Gemini (contatti):`, rawText);
+      console.log(`📥 [GEMINI] Testo risposta:`, rawText);
 
       // Estrai JSON dalla risposta
       let jsonText = rawText;
@@ -187,7 +199,11 @@ NON aggiungere spiegazioni, SOLO il JSON.`;
       return contact;
 
     } catch (error) {
-      console.error('❌ Errore Gemini extractMainContact:', error.message);
+      console.error(`\n❌ [GEMINI] ERRORE in extractMainContact:`);
+      console.error(`   Messaggio: ${error.message}`);
+      console.error(`   Stack: ${error.stack}`);
+      console.error(`   Tipo: ${error.constructor.name}`);
+      console.error(`   Error object:`, error);
       
       // Ritorna contatti vuoti in caso di errore
       return {

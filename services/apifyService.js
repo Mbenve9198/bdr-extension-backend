@@ -423,12 +423,16 @@ class ApifyService {
    * @returns {Promise<{platform: string|null, isSupported: boolean, allTechnologies: array}>}
    */
   async checkEcommercePlatform(url) {
+    console.log(`\n🏗️  [BUILTWITH] checkEcommercePlatform chiamata`);
+    console.log(`🏗️  [BUILTWITH] URL input: ${url}`);
+    
     try {
       // Estrai solo il dominio (builtwith vuole formato "example.com" senza http)
+      console.log(`🏗️  [BUILTWITH] Estrazione dominio...`);
       const urlObj = new URL(url.startsWith('http') ? url : `https://${url}`);
       const domain = urlObj.hostname.replace(/^www\./i, '');
       
-      console.log(`🔍 BuiltWith check per: ${domain}`);
+      console.log(`🏗️  [BUILTWITH] Dominio estratto: ${domain}`);
       
       const input = {
         url: domain,
@@ -437,6 +441,9 @@ class ApifyService {
         retries: 1,
         timeout: 60
       };
+      
+      console.log(`🏗️  [BUILTWITH] Input preparato:`, JSON.stringify(input, null, 2));
+      console.log(`🏗️  [BUILTWITH] Invio richiesta Apify...`);
 
       const response = await axios.post(
         `${this.baseUrl}/acts/canadesk~builtwith/run-sync-get-dataset-items`,
@@ -453,8 +460,13 @@ class ApifyService {
         }
       );
 
+      console.log(`🏗️  [BUILTWITH] Risposta ricevuta!`);
+      console.log(`🏗️  [BUILTWITH] Status: ${response.status}`);
+      console.log(`🏗️  [BUILTWITH] Data type: ${typeof response.data}`);
+      console.log(`🏗️  [BUILTWITH] Data length: ${response.data?.length || 0}`);
+      
       if (!response.data || response.data.length === 0) {
-        console.log(`⚠️  Nessuna tecnologia trovata per ${domain}`);
+        console.log(`⚠️  [BUILTWITH] Nessuna tecnologia trovata per ${domain}`);
         return {
           platform: null,
           isSupported: false,
@@ -478,7 +490,7 @@ class ApifyService {
       const technologies = response.data;
       const techNames = technologies.map(t => t.name?.toLowerCase() || '');
       
-      console.log(`📦 Tecnologie trovate (${techNames.length}):`, techNames.slice(0, 10));
+      console.log(`📦 [BUILTWITH] Tecnologie trovate (${techNames.length}):`, techNames.slice(0, 10));
 
       // Cerca piattaforma ecommerce
       let detectedPlatform = null;
@@ -502,12 +514,12 @@ class ApifyService {
       }
 
       if (detectedPlatform) {
-        console.log(`✅ Piattaforma supportata: ${detectedPlatform}`);
+        console.log(`✅ [BUILTWITH] Piattaforma supportata: ${detectedPlatform}`);
       } else {
-        console.log(`❌ Piattaforma non supportata o non rilevata`);
+        console.log(`❌ [BUILTWITH] Piattaforma non supportata o non rilevata`);
       }
-
-      return {
+      
+      const result = {
         platform: detectedPlatform,
         isSupported,
         allTechnologies: technologies.map(t => ({
@@ -515,6 +527,11 @@ class ApifyService {
           category: t.category
         }))
       };
+      
+      console.log(`🏗️  [BUILTWITH] Risultato finale:`, JSON.stringify(result, null, 2));
+      console.log(`🏗️  [BUILTWITH] checkEcommercePlatform completato\n`);
+
+      return result;
 
     } catch (error) {
       console.error(`❌ Errore BuiltWith check:`, error.message);
