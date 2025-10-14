@@ -1213,9 +1213,9 @@ async function processLeadAnalysis(leadsId, leadIndex, url) {
         return; // Esci senza chiamare SimilarWeb
       }
       
-      // Se il lead precedente era qualificato, riusa i dati
+      // Se il lead precedente era analizzato, riusa i dati
       if (previousLeadSameDomain.analysisStatus === 'analyzed') {
-        console.log(`♻️  RIUSO dati dal lead precedente qualificato`);
+        console.log(`♻️  RIUSO dati dal lead precedente`);
         lead.name = previousLeadSameDomain.name;
         lead.category = previousLeadSameDomain.category;
         lead.averageMonthlyVisits = previousLeadSameDomain.averageMonthlyVisits;
@@ -1229,11 +1229,24 @@ async function processLeadAnalysis(leadsId, leadIndex, url) {
         lead.analyzedAt = new Date();
         lead.notes = `Dati riutilizzati da ${previousLeadSameDomain.url}`;
         
-        // Se era qualificato, qualifica anche questo
         similarLeads.searchStats.totalUrlsAnalyzed += 1;
-        similarLeads.searchStats.totalUrlsQualified += 1;
+        
+        // Verifica se qualifica con i dati riusati
+        const minItaly = similarLeads.filters?.minShipmentsItaly || 100;
+        const minAbroad = similarLeads.filters?.minShipmentsAbroad || 30;
+        const maxItaly = similarLeads.filters?.maxShipmentsItaly || 10000;
+        
+        const qualifies = (lead.monthlyShipmentsItaly >= minItaly || lead.monthlyShipmentsAbroad >= minAbroad) &&
+                         lead.monthlyShipmentsItaly <= maxItaly;
+        
+        if (qualifies) {
+          similarLeads.searchStats.totalUrlsQualified += 1;
+          console.log(`✅ Lead qualificato (riuso): ${url} (ITA: ${lead.monthlyShipmentsItaly}, EST: ${lead.monthlyShipmentsAbroad})`);
+        } else {
+          console.log(`❌ Lead NON qualificato (riuso): ${url} (ITA: ${lead.monthlyShipmentsItaly}, EST: ${lead.monthlyShipmentsAbroad})`);
+        }
+        
         await similarLeads.save();
-        console.log(`✅ Lead qualificato (riuso): ${url}`);
         return; // Esci senza chiamare SimilarWeb
       }
     }
