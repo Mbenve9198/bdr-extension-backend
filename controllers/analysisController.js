@@ -1344,6 +1344,38 @@ async function processLeadAnalysis(leadsId, leadIndex, url) {
       }
     }
 
+    // 🔍 STEP 1: Controlla piattaforma ecommerce con BuiltWith (PRIMA di SimilarWeb)
+    console.log(`🔍 [1/2] Controllo piattaforma ecommerce per ${url}...`);
+    const platformCheck = await apifyService.checkEcommercePlatform(url);
+    
+    console.log(`📦 Risultato BuiltWith:`, JSON.stringify(platformCheck, null, 2));
+    
+    // Salva info piattaforma
+    lead.ecommercePlatform = {
+      platform: platformCheck.platform,
+      isSupported: platformCheck.isSupported,
+      checkedAt: new Date()
+    };
+    
+    // Se la piattaforma NON è supportata, scarta il lead SENZA chiamare SimilarWeb
+    if (!platformCheck.isSupported) {
+      console.log(`❌ Lead SCARTATO: piattaforma non supportata (${platformCheck.platform || 'sconosciuta'})`);
+      lead.analysisStatus = 'failed';
+      lead.error = `Piattaforma non supportata: ${platformCheck.platform || 'sconosciuta'}`;
+      lead.notes = (lead.notes ? lead.notes + ' · ' : '') + `Piattaforma: ${platformCheck.platform || 'non rilevata'}`;
+      similarLeads.searchStats.totalUrlsFailed += 1;
+      await similarLeads.save();
+      return; // Esci dalla funzione, non continuare l'analisi
+    }
+    
+    console.log(`✅ Piattaforma supportata: ${platformCheck.platform || 'rilevata'}`);
+    if (platformCheck.platform) {
+      lead.notes = (lead.notes ? lead.notes + ' · ' : '') + `Piattaforma: ${platformCheck.platform}`;
+    }
+    
+    // 📊 STEP 2: Analisi SimilarWeb
+    console.log(`📊 [2/2] Analisi traffico SimilarWeb...`);
+    
     // Controlla se esiste già un'analisi nel DATABASE GLOBALE
     const existingAnalysis = await EcommerceAnalysis.findOne({
       url: new RegExp(domain.replace(/\./g, '\\.'), 'i')
@@ -1384,38 +1416,6 @@ async function processLeadAnalysis(leadsId, leadIndex, url) {
         }
       }
     }
-
-    // Controlla piattaforma ecommerce con BuiltWith
-    console.log(`🔍 Controllo piattaforma ecommerce per ${url}...`);
-    const platformCheck = await apifyService.checkEcommercePlatform(url);
-    
-    console.log(`📦 Risultato BuiltWith:`, JSON.stringify(platformCheck, null, 2));
-    
-    // Salva info piattaforma
-    lead.ecommercePlatform = {
-      platform: platformCheck.platform,
-      isSupported: platformCheck.isSupported,
-      checkedAt: new Date()
-    };
-    
-    // Se la piattaforma NON è supportata, scarta il lead
-    if (!platformCheck.isSupported) {
-      console.log(`❌ Lead SCARTATO: piattaforma non supportata (${platformCheck.platform || 'sconosciuta'})`);
-      lead.analysisStatus = 'failed';
-      lead.error = `Piattaforma non supportata: ${platformCheck.platform || 'sconosciuta'}`;
-      lead.notes = (lead.notes ? lead.notes + ' · ' : '') + `Piattaforma: ${platformCheck.platform || 'non rilevata'}`;
-      similarLeads.searchStats.totalUrlsFailed += 1;
-      await similarLeads.save();
-      return; // Esci dalla funzione, non continuare l'analisi
-    }
-    
-    console.log(`✅ Piattaforma supportata: ${platformCheck.platform || 'rilevata'}`);
-    if (platformCheck.platform) {
-      lead.notes = (lead.notes ? lead.notes + ' · ' : '') + `Piattaforma: ${platformCheck.platform}`;
-    }
-    
-    // Log finale per conferma
-    console.log(`📋 Lead ecommercePlatform salvato:`, lead.ecommercePlatform);
 
     // Calcola spedizioni per paese
     const shipmentsByCountry = analysisData.trafficByCountry?.map(country => ({

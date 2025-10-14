@@ -432,9 +432,10 @@ class ApifyService {
       
       const input = {
         url: domain,
-        process: 'Get Technology Profile',
-        format: 'Default',
-        cache: 'Use cache'
+        process: 'gt', // Get Technology Profile
+        cache: '1', // Use cache
+        retries: 1,
+        timeout: 60
       };
 
       const response = await axios.post(
@@ -473,8 +474,8 @@ class ApifyService {
         'opencart'
       ];
 
-      // Estrai tutte le tecnologie
-      const technologies = response.data[0] || [];
+      // Estrai tutte le tecnologie (response.data è già l'array)
+      const technologies = response.data;
       const techNames = technologies.map(t => t.name?.toLowerCase() || '');
       
       console.log(`📦 Tecnologie trovate (${techNames.length}):`, techNames.slice(0, 10));
