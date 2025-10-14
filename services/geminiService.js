@@ -108,6 +108,95 @@ NON aggiungere spiegazioni, SOLO il JSON.`;
       throw error;
     }
   }
+
+  /**
+   * Estrae email e telefono principale da un URL specifico
+   * Versione veloce per singoli lead
+   * @param {string} url - URL del sito ecommerce
+   * @param {string} siteName - Nome del sito (opzionale)
+   * @returns {Promise<{email: string|null, phone: string|null}>}
+   */
+  async extractMainContact(url, siteName = '') {
+    if (!this.apiKey) {
+      throw new Error('Gemini API key non configurata');
+    }
+
+    try {
+      console.log(`📞 Gemini: estrazione contatto principale per ${url}`);
+
+      // Prompt ottimizzato per trovare solo contatti principali
+      const prompt = `Visita mentalmente il sito ${url} ${siteName ? `(${siteName})` : ''} e trova i contatti principali dell'azienda.
+
+Cerca nella homepage e pagina contatti:
+- 1 EMAIL PRINCIPALE (preferibilmente info@, contatti@, o email generica aziendale)
+- 1 NUMERO DI TELEFONO PRINCIPALE (preferibilmente fisso/sede principale)
+
+ISTRUZIONI:
+- Se trovi più email, scegli quella più generale/ufficiale
+- Se trovi più telefoni, scegli il numero principale/sede
+- Formati italiani per telefoni: +39, 02, 06, 333, etc.
+- NON inventare informazioni
+- Se non trovi, rispondi "Non disponibile"
+
+Rispondi SOLO in questo formato JSON:
+{
+  "email": "info@example.com",
+  "phone": "+39 02 1234567"
+}
+
+Se non trovi uno dei due, usa null:
+{
+  "email": "info@example.com",
+  "phone": null
+}
+
+NON aggiungere spiegazioni, SOLO il JSON.`;
+
+      const response = await this.ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt,
+        config: {
+          thinkingConfig: {
+            thinkingBudget: 0
+          },
+          temperature: 0.1,
+          maxOutputTokens: 150
+        }
+      });
+
+      const rawText = response.text.trim();
+      console.log(`📥 Risposta Gemini (contatti):`, rawText);
+
+      // Estrai JSON dalla risposta
+      let jsonText = rawText;
+      const jsonMatch = rawText.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
+      if (jsonMatch) {
+        jsonText = jsonMatch[1];
+      }
+
+      const result = JSON.parse(jsonText);
+
+      // Validazione e normalizzazione
+      const contact = {
+        email: result.email && result.email !== 'Non disponibile' && result.email !== 'null' ? result.email : null,
+        phone: result.phone && result.phone !== 'Non disponibile' && result.phone !== 'null' ? result.phone : null
+      };
+
+      console.log(`✅ Contatti estratti: ${contact.email || 'N/A'} | ${contact.phone || 'N/A'}`);
+
+      return contact;
+
+    } catch (error) {
+      console.error('❌ Errore Gemini extractMainContact:', error.message);
+      
+      // Ritorna contatti vuoti in caso di errore
+      return {
+        email: null,
+        phone: null,
+        error: error.message
+      };
+    }
+  }
 }
 
 module.exports = new GeminiService();

@@ -90,6 +90,14 @@ const similarLeadsSchema = new mongoose.Schema({
     // Note aggiuntive
     notes: String,
     
+    // Contatti principali (estratti automaticamente con Gemini)
+    contacts: {
+      email: String,        // Email principale
+      phone: String,        // Telefono principale
+      extractedAt: Date,    // Quando sono stati estratti
+      source: String        // "gemini_auto" per distinguere
+    },
+    
     // Dati enrichment (contatti aziendali estratti con Gemini + Website Crawler)
     enrichment: {
       status: {

@@ -1383,6 +1383,28 @@ async function processLeadAnalysis(leadsId, leadIndex, url) {
     if (qualifies) {
       similarLeads.searchStats.totalUrlsQualified += 1;
       console.log(`✅ Lead qualificato: ${url} (ITA: ${monthlyShipmentsItaly}, EST: ${monthlyShipmentsAbroad})`);
+      
+      // NUOVO: Estrai automaticamente email e telefono con Gemini
+      console.log(`📞 Estrazione automatica contatti per lead qualificato...`);
+      try {
+        const geminiService = require('../services/geminiService');
+        const contacts = await geminiService.extractMainContact(url, lead.name);
+        
+        if (contacts.email || contacts.phone) {
+          lead.contacts = {
+            email: contacts.email,
+            phone: contacts.phone,
+            extractedAt: new Date(),
+            source: 'gemini_auto'
+          };
+          console.log(`✅ Contatti salvati: ${contacts.email || 'N/A'} | ${contacts.phone || 'N/A'}`);
+        } else {
+          console.log(`⚠️  Nessun contatto trovato per ${url}`);
+        }
+      } catch (contactError) {
+        console.error(`❌ Errore estrazione contatti: ${contactError.message}`);
+        // Non bloccare il processo se l'estrazione fallisce
+      }
     } else {
       console.log(`❌ Lead NON qualificato: ${url} (ITA: ${monthlyShipmentsItaly}, EST: ${monthlyShipmentsAbroad})`);
     }
