@@ -980,12 +980,14 @@ Genera una query di ricerca Google specifica e concisa per trovare ecommerce ita
 - In italiano
 - Molto specifica sui prodotti venduti
 - Max 3-5 parole chiave
-- Ottimizzata per trovare ecommerce italiani simili
+- Ottimizzata per trovare negozi online / ecommerce italiani simili
 
 Esempi:
 - Se vende scarpe artigianali → "scarpe artigianali italiane"
 - Se vende gioielli fatti a mano → "gioielli artigianali made in italy"
 - Se vende cosmetici bio → "cosmetici biologici naturali"
+
+IMPORTANTE: NON includere "negozio online" o "ecommerce" nella query, solo i prodotti.
 
 Rispondi SOLO con la query Google, senza spiegazioni o altro testo.`;
     
@@ -1010,7 +1012,16 @@ Rispondi SOLO con la query Google, senza spiegazioni o altro testo.`;
         timeout: 15000 // 15 secondi
       });
 
-      const query = response.data.choices[0].message.content.trim();
+      let query = response.data.choices[0].message.content.trim();
+      
+      // Rimuovi virgolette se presenti
+      query = query.replace(/^["']|["']$/g, '');
+      
+      // Aggiungi "negozio online" all'inizio se non c'è già
+      if (!query.toLowerCase().includes('negozio') && !query.toLowerCase().includes('ecommerce')) {
+        query = `negozio online ${query}`;
+      }
+      
       console.log(`✅ Query Google generata: "${query}"`);
       
       return query;
