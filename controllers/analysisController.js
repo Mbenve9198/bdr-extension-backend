@@ -1237,18 +1237,9 @@ exports.enrichSingleLead = async (req, res) => {
 
     const lead = similarLeads.leads[index];
 
-    // Verifica se già arricchito
-    if (lead.enrichment && lead.enrichment.status === 'enriched') {
-      return res.json({
-        success: true,
-        message: 'Lead già arricchito',
-        data: {
-          leadIndex: index,
-          url: lead.url,
-          enrichment: lead.enrichment
-        }
-      });
-    }
+    // Permetti di rifare l'enrichment anche se già fatto
+    // (utile per testare o aggiornare i dati)
+    console.log(`📊 Stato enrichment attuale: ${lead.enrichment?.status || 'not_enriched'}`);
 
     // Imposta stato enriching
     lead.enrichment = lead.enrichment || {};

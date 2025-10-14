@@ -354,10 +354,19 @@ class ApifyService {
     try {
       console.log(`🔍 Enrichment per URL: ${url}`);
       
+      // Estrai il dominio e crea una query di ricerca
+      const domain = new URL(url).hostname.replace('www.', '');
+      const companyName = domain.split('.')[0].replace(/-/g, ' ');
+      
+      // Query per trovare contatti aziendali
+      const searchQuery = `${companyName} contatti email telefono`;
+      
+      console.log(`🔎 Query Google per enrichment: "${searchQuery}"`);
+      
       const input = {
-        queries: url,
+        queries: searchQuery,
         maxPagesPerQuery: 1,
-        resultsPerPage: 1,
+        resultsPerPage: 3, // Prendiamo i primi 3 risultati per aumentare chance
         countryCode: 'it',
         languageCode: 'it',
         mobileResults: false,
@@ -406,31 +415,52 @@ class ApifyService {
       productAds: []
     };
 
-    // Estrai business leads dai risultati organici
+    // Estrai business leads da TUTTI i risultati organici (non solo il primo)
     if (data.organicResults && data.organicResults.length > 0) {
-      const result = data.organicResults[0];
+      console.log(`📊 Processing ${data.organicResults.length} risultati organici...`);
       
-      // Business leads (se presenti)
-      if (result.businessLeads && result.businessLeads.length > 0) {
-        enrichment.businessLeads = result.businessLeads.map(lead => ({
-          fullName: lead.fullName || lead.name,
-          workEmail: lead.workEmail || lead.email,
-          phoneNumber: lead.phoneNumber || lead.phone,
-          jobTitle: lead.jobTitle || lead.title,
-          linkedInProfile: lead.linkedInProfile || lead.linkedin,
-          companyName: lead.companyName || lead.company,
-          companyDomain: lead.companyDomain || lead.domain
-        }));
-      }
+      data.organicResults.forEach((result, index) => {
+        // Business leads (se presenti)
+        if (result.businessLeads && result.businessLeads.length > 0) {
+          console.log(`✅ Trovati ${result.businessLeads.length} business leads nel risultato #${index + 1}`);
+          
+          const leads = result.businessLeads.map(lead => ({
+            fullName: lead.fullName || lead.name || '',
+            workEmail: lead.workEmail || lead.email || '',
+            phoneNumber: lead.phoneNumber || lead.phone || '',
+            jobTitle: lead.jobTitle || lead.title || '',
+            linkedInProfile: lead.linkedInProfile || lead.linkedin || '',
+            companyName: lead.companyName || lead.company || '',
+            companyDomain: lead.companyDomain || lead.domain || ''
+          }));
+          
+          enrichment.businessLeads.push(...leads);
+        }
 
-      // Review ratings (se presenti)
-      if (result.reviews || result.reviewRating) {
-        enrichment.reviews = {
-          rating: result.reviewRating || result.reviews?.rating,
-          reviewCount: result.reviewCount || result.reviews?.count,
-          source: result.reviews?.source || 'Google'
-        };
-      }
+        // Review ratings (prendi il primo che ha reviews)
+        if (!enrichment.reviews && (result.reviews || result.reviewRating)) {
+          enrichment.reviews = {
+            rating: result.reviewRating || result.reviews?.rating,
+            reviewCount: result.reviewCount || result.reviews?.count,
+            source: result.reviews?.source || 'Google'
+          };
+        }
+      });
+      
+      // Rimuovi duplicati di business leads (stesso email)
+      const uniqueLeads = [];
+      const seenEmails = new Set();
+      
+      enrichment.businessLeads.forEach(lead => {
+        if (lead.workEmail && !seenEmails.has(lead.workEmail)) {
+          seenEmails.add(lead.workEmail);
+          uniqueLeads.push(lead);
+        } else if (!lead.workEmail) {
+          uniqueLeads.push(lead);
+        }
+      });
+      
+      enrichment.businessLeads = uniqueLeads;
     }
 
     // Product ads (se presenti)
