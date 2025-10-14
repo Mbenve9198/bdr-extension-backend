@@ -1273,13 +1273,41 @@ exports.enrichSingleLead = async (req, res) => {
 
 // Processo asincrono di enrichment
 async function enrichLeadProcess(leadsId, leadIndex, url) {
+  const geminiService = require('../services/geminiService');
+  
   try {
     console.log(`🔄 Inizio processo enrichment per ${url}`);
 
-    // Chiama Apify per enrichment
-    const enrichmentData = await apifyService.enrichUrl(url);
+    // Step 1: Crawl website con Apify (home + pagina contatti)
+    console.log(`🕷️  Step 1: Crawl sito web...`);
+    const pages = await apifyService.crawlWebsite(url);
 
-    // Aggiorna il lead con i dati enrichment
+    if (!pages || pages.length === 0) {
+      throw new Error('Nessuna pagina crawlata dal sito');
+    }
+
+    // Step 2: Combina il testo di tutte le pagine
+    const combinedText = pages
+      .map(page => {
+        const pageTitle = page.metadata?.title || '';
+        const pageUrl = page.url || '';
+        const pageText = page.text || '';
+        return `\n=== ${pageTitle} (${pageUrl}) ===\n${pageText}`;
+      })
+      .join('\n\n');
+
+    console.log(`📄 Testo totale estratto: ${combinedText.length} caratteri da ${pages.length} pagine`);
+
+    // Step 3: Estrai nome azienda dall'URL
+    const urlObj = new URL(url);
+    const domain = urlObj.hostname.replace('www.', '');
+    const companyName = domain.split('.')[0].replace(/-/g, ' ');
+
+    // Step 4: Usa Gemini per estrarre email e telefoni
+    console.log(`🤖 Step 2: Estrazione contatti con Gemini...`);
+    const contacts = await geminiService.extractContacts(combinedText, companyName);
+
+    // Step 5: Aggiorna il lead con i dati enrichment
     const similarLeads = await SimilarLeads.findById(leadsId);
     
     if (!similarLeads) {
@@ -1294,21 +1322,29 @@ async function enrichLeadProcess(leadsId, leadIndex, url) {
       return;
     }
 
-    // Aggiorna enrichment
+    // Aggiorna enrichment con nuovo formato (emails + phones)
     lead.enrichment = {
       status: 'enriched',
       enrichedAt: new Date(),
-      businessLeads: enrichmentData?.businessLeads || [],
-      reviews: enrichmentData?.reviews || null,
-      productAds: enrichmentData?.productAds || [],
+      emails: contacts.emails || [],
+      phones: contacts.phones || [],
+      pagesCrawled: pages.length,
       error: null
     };
 
     await similarLeads.save();
 
     console.log(`✅ Enrichment completato per ${url}`);
-    console.log(`📊 Business leads trovati: ${lead.enrichment.businessLeads.length}`);
-    console.log(`⭐ Reviews: ${lead.enrichment.reviews ? 'Sì' : 'No'}`);
+    console.log(`📧 Email trovate: ${lead.enrichment.emails.length}`);
+    console.log(`📞 Telefoni trovati: ${lead.enrichment.phones.length}`);
+    console.log(`📄 Pagine analizzate: ${pages.length}`);
+
+    if (lead.enrichment.emails.length > 0) {
+      console.log(`  → Email:`, lead.enrichment.emails);
+    }
+    if (lead.enrichment.phones.length > 0) {
+      console.log(`  → Telefoni:`, lead.enrichment.phones);
+    }
 
   } catch (error) {
     console.error('❌ Errore processo enrichment:', error);
@@ -1319,7 +1355,9 @@ async function enrichLeadProcess(leadsId, leadIndex, url) {
       if (similarLeads && similarLeads.leads[leadIndex]) {
         similarLeads.leads[leadIndex].enrichment = {
           status: 'failed',
-          error: error.message
+          error: error.message,
+          emails: [],
+          phones: []
         };
         await similarLeads.save();
       }

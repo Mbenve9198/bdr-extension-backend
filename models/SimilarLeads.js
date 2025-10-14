@@ -83,7 +83,7 @@ const similarLeadsSchema = new mongoose.Schema({
     // Note aggiuntive
     notes: String,
     
-    // Dati enrichment (contatti aziendali)
+    // Dati enrichment (contatti aziendali estratti con Gemini + Website Crawler)
     enrichment: {
       status: {
         type: String,
@@ -91,25 +91,22 @@ const similarLeadsSchema = new mongoose.Schema({
         default: 'not_enriched'
       },
       enrichedAt: Date,
-      businessLeads: [{
-        fullName: String,
-        workEmail: String,
-        phoneNumber: String,
-        jobTitle: String,
-        linkedInProfile: String,
-        companyName: String,
-        companyDomain: String
+      // Email trovate sul sito (estratte da Gemini)
+      emails: [{
+        type: String,
+        trim: true,
+        lowercase: true
       }],
-      reviews: {
-        rating: Number,
-        reviewCount: Number,
-        source: String // "Google", "Trustpilot", etc.
+      // Numeri di telefono trovati (estratti da Gemini)
+      phones: [{
+        type: String,
+        trim: true
+      }],
+      // Numero di pagine crawlate
+      pagesCrawled: {
+        type: Number,
+        default: 0
       },
-      productAds: [{
-        title: String,
-        price: String,
-        description: String
-      }],
       error: String
     }
   }],

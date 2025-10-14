@@ -323,6 +323,97 @@ class ApifyService {
     return processedResults;
   }
 
+  /**
+   * Crawl website per estrarre contenuto testuale (per enrichment contatti)
+   * Usa Website Content Crawler di Apify
+   * @param {string} url - URL del sito da crawlare
+   * @param {object} options - Opzioni crawler
+   * @returns {Promise<Array>} - Array di pagine con testo estratto
+   */
+  async crawlWebsite(url, options = {}) {
+    try {
+      console.log(`🕷️  Website Crawler per: ${url}`);
+      
+      // Estrai dominio
+      const urlObj = new URL(url);
+      const baseUrl = `${urlObj.protocol}//${urlObj.hostname}`;
+      
+      const input = {
+        startUrls: [{ url: baseUrl }],
+        crawlerType: 'playwright:firefox', // Browser per siti dinamici
+        maxCrawlPages: 5, // Massimo 5 pagine (home + contatti + about)
+        // Includi solo pagine rilevanti per contatti
+        includeUrlGlobs: [
+          `${baseUrl}`,
+          `${baseUrl}/`,
+          `${baseUrl}/contatti*`,
+          `${baseUrl}/contact*`,
+          `${baseUrl}/chi-siamo*`,
+          `${baseUrl}/about*`,
+          `${baseUrl}/it/contatti*`,
+          `${baseUrl}/it/contact*`
+        ],
+        // Escludi pagine inutili
+        excludeUrlGlobs: [
+          '**/*privacy*',
+          '**/*cookie*',
+          '**/*termini*',
+          '**/*terms*',
+          '**/*product*',
+          '**/*shop*',
+          '**/*cart*'
+        ],
+        htmlTransformer: 'readableText', // Estrai solo testo leggibile
+        readableTextCharThreshold: 100,
+        saveHtml: false,
+        saveMarkdown: false,
+        saveFiles: false,
+        removeElementsCssSelector: 'nav, footer, script, style, [class*="cookie"], [class*="popup"]',
+        clickElementsCssSelector: '', // Non cliccare elementi
+        maxCrawlDepth: 2, // Massimo 2 livelli di profondità
+        maxConcurrency: 1, // Un crawl alla volta
+        maxRequestRetries: 2,
+        requestTimeoutSecs: 30,
+        ...options
+      };
+
+      console.log(`🔎 Crawl impostato: max ${input.maxCrawlPages} pagine, depth ${input.maxCrawlDepth}`);
+
+      const response = await axios.post(
+        `${this.baseUrl}/acts/apify~website-content-crawler/run-sync-get-dataset-items`,
+        input,
+        {
+          headers: {
+            'Authorization': `Bearer ${this.apiToken}`,
+            'Content-Type': 'application/json'
+          },
+          params: {
+            token: this.apiToken
+          },
+          timeout: 180000 // 3 minuti timeout (crawler è più lento)
+        }
+      );
+
+      if (response.data && response.data.length > 0) {
+        console.log(`✅ Website crawl completato: ${response.data.length} pagine estratte`);
+        
+        // Log pagine trovate
+        response.data.forEach((page, idx) => {
+          console.log(`  📄 Pagina ${idx + 1}: ${page.url} (${page.text?.length || 0} caratteri)`);
+        });
+        
+        return response.data;
+      } else {
+        console.log('⚠️  Nessuna pagina crawlata');
+        return [];
+      }
+
+    } catch (error) {
+      console.error(`❌ Errore Website Crawler:`, error.message);
+      throw this.handleApifyError(error);
+    }
+  }
+
   // Metodo per ottenere statistiche sull'uso dell'API Apify
   async getApiStats() {
     try {
@@ -347,138 +438,6 @@ class ApifyService {
       console.error('Errore recupero statistiche Apify:', error);
       return null;
     }
-  }
-
-  // Enrich un singolo URL con business leads e reviews
-  async enrichUrl(url, options = {}) {
-    try {
-      console.log(`🔍 Enrichment per URL: ${url}`);
-      
-      // Estrai il dominio e crea una query di ricerca
-      const domain = new URL(url).hostname.replace('www.', '');
-      const companyName = domain.split('.')[0].replace(/-/g, ' ');
-      
-      // Query per trovare contatti aziendali
-      const searchQuery = `${companyName} contatti email telefono`;
-      
-      console.log(`🔎 Query Google per enrichment: "${searchQuery}"`);
-      
-      const input = {
-        queries: searchQuery,
-        maxPagesPerQuery: 1,
-        resultsPerPage: 3, // Prendiamo i primi 3 risultati per aumentare chance
-        countryCode: 'it',
-        languageCode: 'it',
-        mobileResults: false,
-        includeUnfilteredResults: false,
-        saveHtml: false,
-        saveHtmlToKeyValueStore: false,
-        // Abilita enrichment
-        enableBusinessLeadsEnrichment: true,
-        ...options
-      };
-
-      const response = await axios.post(
-        `${this.baseUrl}/acts/${this.googleSearchActorId}/run-sync-get-dataset-items`,
-        input,
-        {
-          headers: {
-            'Authorization': `Bearer ${this.apiToken}`,
-            'Content-Type': 'application/json'
-          },
-          params: {
-            token: this.apiToken
-          },
-          timeout: 180000 // 3 minuti timeout per enrichment
-        }
-      );
-
-      if (response.data && response.data.length > 0) {
-        console.log(`✅ Enrichment completato per ${url}`);
-        return this.processEnrichmentData(response.data[0]);
-      } else {
-        console.log('⚠️  Nessun dato enrichment ricevuto');
-        return null;
-      }
-
-    } catch (error) {
-      console.error(`❌ Errore enrichment Apify:`, error.message);
-      throw this.handleApifyError(error);
-    }
-  }
-
-  // Process enrichment data from Apify response
-  processEnrichmentData(data) {
-    const enrichment = {
-      businessLeads: [],
-      reviews: null,
-      productAds: []
-    };
-
-    // Estrai business leads da TUTTI i risultati organici (non solo il primo)
-    if (data.organicResults && data.organicResults.length > 0) {
-      console.log(`📊 Processing ${data.organicResults.length} risultati organici...`);
-      
-      data.organicResults.forEach((result, index) => {
-        // Business leads (se presenti)
-        if (result.businessLeads && result.businessLeads.length > 0) {
-          console.log(`✅ Trovati ${result.businessLeads.length} business leads nel risultato #${index + 1}`);
-          
-          const leads = result.businessLeads.map(lead => ({
-            fullName: lead.fullName || lead.name || '',
-            workEmail: lead.workEmail || lead.email || '',
-            phoneNumber: lead.phoneNumber || lead.phone || '',
-            jobTitle: lead.jobTitle || lead.title || '',
-            linkedInProfile: lead.linkedInProfile || lead.linkedin || '',
-            companyName: lead.companyName || lead.company || '',
-            companyDomain: lead.companyDomain || lead.domain || ''
-          }));
-          
-          enrichment.businessLeads.push(...leads);
-        }
-
-        // Review ratings (prendi il primo che ha reviews)
-        if (!enrichment.reviews && (result.reviews || result.reviewRating)) {
-          enrichment.reviews = {
-            rating: result.reviewRating || result.reviews?.rating,
-            reviewCount: result.reviewCount || result.reviews?.count,
-            source: result.reviews?.source || 'Google'
-          };
-        }
-      });
-      
-      // Rimuovi duplicati di business leads (stesso email)
-      const uniqueLeads = [];
-      const seenEmails = new Set();
-      
-      enrichment.businessLeads.forEach(lead => {
-        if (lead.workEmail && !seenEmails.has(lead.workEmail)) {
-          seenEmails.add(lead.workEmail);
-          uniqueLeads.push(lead);
-        } else if (!lead.workEmail) {
-          uniqueLeads.push(lead);
-        }
-      });
-      
-      enrichment.businessLeads = uniqueLeads;
-    }
-
-    // Product ads (se presenti)
-    if (data.paidProducts && data.paidProducts.length > 0) {
-      enrichment.productAds = data.paidProducts.map(product => ({
-        title: product.title,
-        price: product.price,
-        description: product.description
-      }));
-    }
-
-    console.log(`📊 Enrichment estratto:`, {
-      businessLeads: enrichment.businessLeads.length,
-      hasReviews: !!enrichment.reviews,
-      productAds: enrichment.productAds.length
-    });
-
-    return enrichment;
   }
 }
 
