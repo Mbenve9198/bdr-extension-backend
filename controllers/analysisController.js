@@ -974,9 +974,13 @@ exports.getSimilarLeads = async (req, res) => {
       });
     }
 
+    // Filtra solo i lead analizzati con successo
+    const leadsData = leads.toObject();
+    leadsData.leads = leads.getQualifiedLeads();
+
     res.json({
       success: true,
-      data: leads
+      data: leadsData
     });
 
   } catch (error) {

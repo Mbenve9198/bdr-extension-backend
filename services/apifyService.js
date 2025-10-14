@@ -483,7 +483,9 @@ class ApifyService {
         'storeden',
         'magento',
         'wix',
-        'opencart'
+        'opencart',
+        'teamsystem',
+        'teamsystem commerce'
       ];
 
       // Estrai tutte le tecnologie (response.data è già l'array)
