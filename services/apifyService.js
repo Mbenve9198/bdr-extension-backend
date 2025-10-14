@@ -417,6 +417,116 @@ class ApifyService {
     }
   }
 
+  /**
+   * Controlla la piattaforma ecommerce di un sito usando BuiltWith
+   * @param {string} url - URL del sito da controllare
+   * @returns {Promise<{platform: string|null, isSupported: boolean, allTechnologies: array}>}
+   */
+  async checkEcommercePlatform(url) {
+    try {
+      // Estrai solo il dominio (builtwith vuole formato "example.com" senza http)
+      const urlObj = new URL(url.startsWith('http') ? url : `https://${url}`);
+      const domain = urlObj.hostname.replace(/^www\./i, '');
+      
+      console.log(`🔍 BuiltWith check per: ${domain}`);
+      
+      const input = {
+        url: domain,
+        process: 'Get Technology Profile',
+        format: 'Default',
+        cache: 'Use cache'
+      };
+
+      const response = await axios.post(
+        `${this.baseUrl}/acts/canadesk~builtwith/run-sync-get-dataset-items`,
+        input,
+        {
+          headers: {
+            'Authorization': `Bearer ${this.apiToken}`,
+            'Content-Type': 'application/json'
+          },
+          params: {
+            token: this.apiToken
+          },
+          timeout: 60000 // 60 secondi timeout
+        }
+      );
+
+      if (!response.data || response.data.length === 0) {
+        console.log(`⚠️  Nessuna tecnologia trovata per ${domain}`);
+        return {
+          platform: null,
+          isSupported: false,
+          allTechnologies: []
+        };
+      }
+
+      // Piattaforme ecommerce supportate (case-insensitive)
+      const supportedPlatforms = [
+        'woocommerce',
+        'wordpress', 
+        'prestashop',
+        'shopify',
+        'storeden',
+        'magento',
+        'wix',
+        'opencart'
+      ];
+
+      // Estrai tutte le tecnologie
+      const technologies = response.data[0] || [];
+      const techNames = technologies.map(t => t.name?.toLowerCase() || '');
+      
+      console.log(`📦 Tecnologie trovate (${techNames.length}):`, techNames.slice(0, 10));
+
+      // Cerca piattaforma ecommerce
+      let detectedPlatform = null;
+      let isSupported = false;
+
+      for (const tech of technologies) {
+        const techName = (tech.name || '').toLowerCase();
+        const category = (tech.category || '').toLowerCase();
+        
+        // Controlla se è una piattaforma supportata
+        for (const platform of supportedPlatforms) {
+          if (techName.includes(platform) || 
+              (category.includes('ecommerce') && techName.includes(platform))) {
+            detectedPlatform = platform;
+            isSupported = true;
+            break;
+          }
+        }
+        
+        if (isSupported) break;
+      }
+
+      if (detectedPlatform) {
+        console.log(`✅ Piattaforma supportata: ${detectedPlatform}`);
+      } else {
+        console.log(`❌ Piattaforma non supportata o non rilevata`);
+      }
+
+      return {
+        platform: detectedPlatform,
+        isSupported,
+        allTechnologies: technologies.map(t => ({
+          name: t.name,
+          category: t.category
+        }))
+      };
+
+    } catch (error) {
+      console.error(`❌ Errore BuiltWith check:`, error.message);
+      // In caso di errore, assumiamo che sia supportato (per non bloccare tutto)
+      return {
+        platform: null,
+        isSupported: true, // Default: non blocchiamo se BuiltWith fallisce
+        allTechnologies: [],
+        error: error.message
+      };
+    }
+  }
+
   // Metodo per ottenere statistiche sull'uso dell'API Apify
   async getApiStats() {
     try {

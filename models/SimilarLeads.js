@@ -34,6 +34,13 @@ const similarLeadsSchema = new mongoose.Schema({
     description: String,
     category: String,
     
+    // Piattaforma ecommerce (rilevata da BuiltWith)
+    ecommercePlatform: {
+      platform: String, // es: "shopify", "woocommerce", "prestashop"
+      isSupported: Boolean, // true se rientra nelle piattaforme accettate
+      checkedAt: Date
+    },
+    
     // Metriche visite
     averageMonthlyVisits: {
       type: Number,

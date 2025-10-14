@@ -1313,6 +1313,33 @@ async function processLeadAnalysis(leadsId, leadIndex, url) {
       analysisData = await apifyService.runAnalysis(url);
     }
 
+    // Controlla piattaforma ecommerce con BuiltWith
+    console.log(`🔍 Controllo piattaforma ecommerce per ${url}...`);
+    const platformCheck = await apifyService.checkEcommercePlatform(url);
+    
+    // Salva info piattaforma
+    lead.ecommercePlatform = {
+      platform: platformCheck.platform,
+      isSupported: platformCheck.isSupported,
+      checkedAt: new Date()
+    };
+    
+    // Se la piattaforma NON è supportata, scarta il lead
+    if (!platformCheck.isSupported) {
+      console.log(`❌ Lead SCARTATO: piattaforma non supportata (${platformCheck.platform || 'sconosciuta'})`);
+      lead.analysisStatus = 'failed';
+      lead.error = `Piattaforma non supportata: ${platformCheck.platform || 'sconosciuta'}`;
+      lead.notes = (lead.notes ? lead.notes + ' · ' : '') + `Piattaforma: ${platformCheck.platform || 'non rilevata'}`;
+      similarLeads.searchStats.totalUrlsFailed += 1;
+      await similarLeads.save();
+      return; // Esci dalla funzione, non continuare l'analisi
+    }
+    
+    console.log(`✅ Piattaforma supportata: ${platformCheck.platform || 'rilevata'}`);
+    if (platformCheck.platform) {
+      lead.notes = (lead.notes ? lead.notes + ' · ' : '') + `Piattaforma: ${platformCheck.platform}`;
+    }
+
     // Calcola spedizioni per paese
     const shipmentsByCountry = analysisData.trafficByCountry?.map(country => ({
       countryName: country.countryName,
