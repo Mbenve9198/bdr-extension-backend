@@ -889,161 +889,51 @@ async function processLeadsSearch(leadsId, analysis, userId, googleQuery) {
     similarLeads.searchStats.totalUrlsFound = searchResults.length;
     await similarLeads.save();
 
-    // 2. Analizza ogni URL e filtra
-    console.log('📊 Step 2: Analisi e filtraggio URLs...');
-    const leads = [];
-    const analyzedDomains = new Set(); // Track domini già analizzati
+    // 2. Crea i lead e avvia analisi per ciascuno
+    console.log('📊 Step 2: Creazione leads e analisi...');
     
+    // Filtra marketplace e crea lead per ogni risultato Google
     for (const result of searchResults) {
-      try {
-        // Estrai dominio pulito
-        const domain = extractCleanDomain(result.url);
-        
-        // Skip marketplace
-        if (isMarketplace(result.url)) {
-          console.log(`  ⛔ Saltato marketplace: ${domain}`);
-          continue;
-        }
-        
-        // Skip se dominio già analizzato in questa ricerca
-        if (analyzedDomains.has(domain)) {
-          console.log(`  ⏭️ Dominio già analizzato: ${domain}`);
-          continue;
-        }
-        
-        console.log(`  🔍 Analizzo: ${result.url} (dominio: ${domain})`);
-        
-        // Cerca analisi esistente nel database per questo dominio
-        const existingAnalysis = await EcommerceAnalysis.findOne({
-          $or: [
-            { url: { $regex: domain.replace(/\./g, '\\.'), $options: 'i' } }
-          ],
-          status: 'completed'
-        }).sort({ createdAt: -1 });
-        
-        let apifyData;
-        let fromExistingAnalysis = false;
-        
-        if (existingAnalysis) {
-          console.log(`  📋 Trovata analisi esistente per ${domain}`);
-          apifyData = existingAnalysis.toObject();
-          fromExistingAnalysis = true;
-        } else {
-          // Analizza con SimilarWeb tramite Apify
-          apifyData = await apifyService.runAnalysis(result.url);
-        }
-        
-        // Aggiungi dominio ai già analizzati
-        analyzedDomains.add(domain);
-        
-        // Calcola spedizioni per paese
-        const shipmentsByCountry = [];
-        let monthlyShipmentsItaly = 0;
-        let monthlyShipmentsAbroad = 0;
-        
-        for (const country of apifyData.topCountries || []) {
-          const countryShipments = country.estimatedShipments || 0;
-          
-          shipmentsByCountry.push({
-            countryName: country.countryName,
-            countryCode: country.countryCode,
-            monthlyShipments: countryShipments,
-            monthlyVisits: country.estimatedVisits || 0,
-            visitsShare: country.visitsShare || 0
-          });
-          
-          // Distingui Italia vs Estero
-          if (country.countryCode === 'IT' || country.countryName.toLowerCase().includes('ital')) {
-            monthlyShipmentsItaly += countryShipments;
-          } else {
-            monthlyShipmentsAbroad += countryShipments;
-          }
-        }
-        
-        const totalMonthlyShipments = monthlyShipmentsItaly + monthlyShipmentsAbroad;
-        
-        // Applica filtri
-        const qualifies = (
-          (monthlyShipmentsItaly >= 100 || monthlyShipmentsAbroad >= 30) &&
-          monthlyShipmentsItaly <= 10000
-        );
-        
-        if (qualifies) {
-          // Verifica se il lead esiste già in altri record (anche di altri utenti)
-          const existingLead = await SimilarLeads.findOne({
-            'leads.url': result.url,
-            status: 'completed'
-          }).populate('generatedBy', 'firstName lastName username');
-          
-          const leadData = {
-            url: result.url, // Usa URL originale Google Search, non quello di SimilarWeb
-            name: apifyData.name,
-            title: result.title,
-            description: result.description,
-            category: apifyData.category,
-            averageMonthlyVisits: apifyData.calculatedMetrics?.averageMonthlyVisits || 0,
-            shipmentsByCountry: shipmentsByCountry,
-            totalMonthlyShipments: totalMonthlyShipments,
-            monthlyShipmentsItaly: monthlyShipmentsItaly,
-            monthlyShipmentsAbroad: monthlyShipmentsAbroad,
-            googleSearchPosition: result.position,
-            googleSearchDescription: result.description,
-            analysisStatus: 'analyzed',
-            analyzedAt: new Date()
-          };
-          
-          // Aggiungi nota se già presente in altri lead
-          if (existingLead && fromExistingAnalysis) {
-            leadData.notes = `Lead già presente in ricerca di ${existingLead.generatedBy?.firstName || 'altro utente'}`;
-          } else if (fromExistingAnalysis) {
-            leadData.notes = 'Analisi riutilizzata dal database';
-          }
-          
-          leads.push(leadData);
-          
-          console.log(`  ✅ Lead qualificato: ${apifyData.name} (IT: ${monthlyShipmentsItaly}, Estero: ${monthlyShipmentsAbroad})${fromExistingAnalysis ? ' [RIUSATO]' : ''}`);
-        } else {
-          console.log(`  ❌ Non qualificato: IT: ${monthlyShipmentsItaly}, Estero: ${monthlyShipmentsAbroad}`);
-        }
-        
-        similarLeads.searchStats.totalUrlsAnalyzed++;
-        if (qualifies) {
-          similarLeads.searchStats.totalUrlsQualified++;
-        }
-        
-      } catch (urlError) {
-        console.error(`  ❌ Errore analisi ${result.url}:`, urlError.message);
-        
-        // Aggiungi lead con errore
-        leads.push({
-          url: result.url,
-          title: result.title,
-          description: result.description,
-          googleSearchPosition: result.position,
-          analysisStatus: 'failed',
-          error: urlError.message
-        });
-        
-        similarLeads.searchStats.totalUrlsFailed++;
+      const domain = extractCleanDomain(result.url);
+      
+      // Skip marketplace
+      if (isMarketplace(result.url)) {
+        console.log(`  ⛔ Saltato marketplace: ${domain}`);
+        continue;
       }
       
-      // Salva progress ogni 5 URLs
-      if (leads.length % 5 === 0) {
-        similarLeads.leads = leads;
-        await similarLeads.save();
-      }
+      console.log(`  📝 Aggiungo lead: ${result.url} (dominio: ${domain})`);
+      
+      // Crea lead pending (verrà analizzato dopo)
+      similarLeads.leads.push({
+        url: result.url,
+        title: result.title,
+        description: result.description,
+        googleSearchPosition: result.position,
+        googleSearchDescription: result.description,
+        analysisStatus: 'pending'
+      });
     }
-
-    // 3. Salva risultati finali
-    similarLeads.leads = leads;
-    similarLeads.status = 'completed';
-    similarLeads.processingTime.completedAt = new Date();
-    similarLeads.processingTime.durationMs = 
-      similarLeads.processingTime.completedAt - similarLeads.processingTime.startedAt;
     
     await similarLeads.save();
+    console.log(`📦 Creati ${similarLeads.leads.length} lead da analizzare`);
     
-    console.log(`✅ Processo completato: ${similarLeads.searchStats.totalUrlsQualified} leads qualificati`);
+    // 3. Analizza ogni lead usando processLeadAnalysis (con BuiltWith + Gemini)
+    console.log('📊 Step 3: Analisi dettagliata con BuiltWith + SimilarWeb + Gemini...');
+    for (let i = 0; i < similarLeads.leads.length; i++) {
+      await processLeadAnalysis(leadsId, i, similarLeads.leads[i].url);
+    }
+
+    // 4. Completa la ricerca
+    const updatedLeads = await SimilarLeads.findById(leadsId);
+    updatedLeads.status = 'completed';
+    updatedLeads.processingTime.completedAt = new Date();
+    updatedLeads.processingTime.durationMs = 
+      updatedLeads.processingTime.completedAt - updatedLeads.processingTime.startedAt;
+    
+    await updatedLeads.save();
+    
+    console.log(`✅ Processo completato: ${updatedLeads.searchStats.totalUrlsQualified} leads qualificati su ${updatedLeads.searchStats.totalUrlsAnalyzed} analizzati`);
 
   } catch (error) {
     console.error('❌ Errore processo leads:', error);
