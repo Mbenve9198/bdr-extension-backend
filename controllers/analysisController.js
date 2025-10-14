@@ -1295,8 +1295,56 @@ async function processLeadAnalysis(leadsId, leadIndex, url) {
       return;
     }
 
-    // Controlla se esiste già un'analisi per questo dominio
+    // Estrai dominio pulito
     const domain = extractCleanDomain(url);
+    
+    // NUOVO: Controlla se lo stesso dominio è già stato analizzato in QUESTA ricerca
+    const previousLeadSameDomain = similarLeads.leads.find((l, idx) => {
+      if (idx >= leadIndex) return false; // Solo lead precedenti
+      const leadDomain = extractCleanDomain(l.url);
+      return leadDomain === domain;
+    });
+
+    if (previousLeadSameDomain) {
+      console.log(`🔄 Dominio ${domain} già analizzato in questa ricerca (indice ${similarLeads.leads.indexOf(previousLeadSameDomain)})`);
+      
+      // Se il lead precedente è stato scartato, scarta anche questo
+      if (previousLeadSameDomain.analysisStatus === 'failed') {
+        console.log(`❌ SCARTO automatico: dominio già scartato in precedenza`);
+        lead.analysisStatus = 'failed';
+        lead.error = `Dominio già scartato: ${previousLeadSameDomain.error || 'criteri non soddisfatti'}`;
+        lead.notes = `Stesso dominio di ${previousLeadSameDomain.url}`;
+        similarLeads.searchStats.totalUrlsFailed += 1;
+        await similarLeads.save();
+        return; // Esci senza chiamare SimilarWeb
+      }
+      
+      // Se il lead precedente era qualificato, riusa i dati
+      if (previousLeadSameDomain.analysisStatus === 'analyzed') {
+        console.log(`♻️  RIUSO dati dal lead precedente qualificato`);
+        lead.name = previousLeadSameDomain.name;
+        lead.category = previousLeadSameDomain.category;
+        lead.averageMonthlyVisits = previousLeadSameDomain.averageMonthlyVisits;
+        lead.shipmentsByCountry = previousLeadSameDomain.shipmentsByCountry;
+        lead.monthlyShipmentsItaly = previousLeadSameDomain.monthlyShipmentsItaly;
+        lead.monthlyShipmentsAbroad = previousLeadSameDomain.monthlyShipmentsAbroad;
+        lead.totalMonthlyShipments = previousLeadSameDomain.totalMonthlyShipments;
+        lead.ecommercePlatform = previousLeadSameDomain.ecommercePlatform;
+        lead.contacts = previousLeadSameDomain.contacts;
+        lead.analysisStatus = 'analyzed';
+        lead.analyzedAt = new Date();
+        lead.notes = `Dati riutilizzati da ${previousLeadSameDomain.url}`;
+        
+        // Se era qualificato, qualifica anche questo
+        similarLeads.searchStats.totalUrlsAnalyzed += 1;
+        similarLeads.searchStats.totalUrlsQualified += 1;
+        await similarLeads.save();
+        console.log(`✅ Lead qualificato (riuso): ${url}`);
+        return; // Esci senza chiamare SimilarWeb
+      }
+    }
+
+    // Controlla se esiste già un'analisi nel DATABASE GLOBALE
     const existingAnalysis = await EcommerceAnalysis.findOne({
       url: new RegExp(domain.replace(/\./g, '\\.'), 'i')
     });
@@ -1304,12 +1352,12 @@ async function processLeadAnalysis(leadsId, leadIndex, url) {
     let analysisData;
 
     if (existingAnalysis) {
-      console.log(`♻️  Riuso analisi esistente per ${domain}`);
+      console.log(`♻️  Riuso analisi esistente dal database per ${domain}`);
       analysisData = existingAnalysis;
       lead.notes = (lead.notes ? lead.notes + ' · ' : '') + 'Analisi riutilizzata dal database';
     } else {
       // Nuova analisi con Apify
-      console.log(`🆕 Nuova analisi per ${url}`);
+      console.log(`🆕 Nuova analisi SimilarWeb per ${url}`);
       analysisData = await apifyService.runAnalysis(url);
     }
 
