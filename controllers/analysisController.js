@@ -1356,9 +1356,33 @@ async function processLeadAnalysis(leadsId, leadIndex, url) {
       analysisData = existingAnalysis;
       lead.notes = (lead.notes ? lead.notes + ' · ' : '') + 'Analisi riutilizzata dal database';
     } else {
-      // Nuova analisi con Apify
+      // Nuova analisi con Apify (con retry automatico)
       console.log(`🆕 Nuova analisi SimilarWeb per ${url}`);
-      analysisData = await apifyService.runAnalysis(url);
+      
+      const maxRetries = 3;
+      let lastError;
+      
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          console.log(`📡 Tentativo ${attempt}/${maxRetries} - Chiamata Apify...`);
+          analysisData = await apifyService.runAnalysis(url);
+          console.log(`✅ Analisi completata al tentativo ${attempt}`);
+          break; // Successo, esci dal loop
+        } catch (error) {
+          lastError = error;
+          console.error(`❌ Tentativo ${attempt}/${maxRetries} fallito: ${error.message}`);
+          
+          if (attempt < maxRetries) {
+            // Attendi 3 secondi prima del prossimo tentativo
+            console.log(`⏳ Attendo 3 secondi prima del prossimo tentativo...`);
+            await new Promise(resolve => setTimeout(resolve, 3000));
+          } else {
+            // Ultimo tentativo fallito, rilancia l'errore
+            console.error(`❌ Tutti i ${maxRetries} tentativi falliti per ${url}`);
+            throw lastError;
+          }
+        }
+      }
     }
 
     // Controlla piattaforma ecommerce con BuiltWith
