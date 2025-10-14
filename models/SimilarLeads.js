@@ -148,7 +148,7 @@ const similarLeadsSchema = new mongoose.Schema({
       // Numero di pagine Google già cercate (per espansione ricerca)
       lastGooglePageSearched: {
         type: Number,
-        default: 5 // Default: 5 pagine (50 risultati iniziali)
+        default: 20 // Default: 20 pagine (200 risultati iniziali)
       }
     },
     default: () => ({
@@ -156,7 +156,7 @@ const similarLeadsSchema = new mongoose.Schema({
       totalUrlsAnalyzed: 0,
       totalUrlsQualified: 0,
       totalUrlsFailed: 0,
-      lastGooglePageSearched: 5
+      lastGooglePageSearched: 20
     })
   },
   

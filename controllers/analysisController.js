@@ -881,9 +881,11 @@ async function processLeadsSearch(leadsId, analysis, userId, googleQuery) {
     console.log(`🚀 Inizio processo leads per ${analysis.url}`);
     console.log(`📝 Query Google: "${googleQuery}"`);
 
-    // 1. Esegui Google Search con Apify
+    // 1. Esegui Google Search con Apify (20 pagine = ~200 risultati)
     console.log('🔍 Step 1: Google Search...');
-    const searchResults = await apifyService.googleSearch(googleQuery);
+    const searchResults = await apifyService.googleSearch(googleQuery, {
+      maxPagesPerQuery: 20
+    });
     console.log(`✅ Trovati ${searchResults.length} risultati da Google`);
     
     similarLeads.searchStats.totalUrlsFound = searchResults.length;
