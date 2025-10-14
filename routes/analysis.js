@@ -50,6 +50,7 @@ router.post('/:id/similar', analysisController.findSimilarEcommerce);
 router.get('/leads/my-leads', analysisController.getMyLeadsList);
 router.get('/leads/:leadsId', analysisController.getSimilarLeads);
 router.delete('/leads/:leadsId', analysisController.deleteSimilarLeads);
+router.post('/leads/:leadsId/expand', analysisController.expandSimilarLeads); // Espandi ricerca
 router.post('/leads/:leadsId/enrich/:leadIndex', analysisController.enrichSingleLead);
 
 module.exports = router; 

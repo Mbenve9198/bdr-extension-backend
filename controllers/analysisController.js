@@ -1198,6 +1198,176 @@ exports.deleteSimilarLeads = async (req, res) => {
 };
 
 /**
+ * Espandi una ricerca esistente con altri 50 risultati Google
+ * POST /api/analysis/leads/:leadsId/expand
+ */
+exports.expandSimilarLeads = async (req, res) => {
+  try {
+    const { leadsId } = req.params;
+    const userId = req.user._id;
+
+    console.log(`🔄 Richiesta espansione ricerca ${leadsId}`);
+
+    // Trova la ricerca esistente
+    const similarLeads = await SimilarLeads.findById(leadsId);
+
+    if (!similarLeads) {
+      return res.status(404).json({
+        success: false,
+        message: 'Ricerca non trovata'
+      });
+    }
+
+    // Verifica proprietà
+    if (similarLeads.generatedBy.toString() !== userId.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: 'Non hai i permessi per espandere questa ricerca'
+      });
+    }
+
+    // Verifica che non sia già in processing
+    if (similarLeads.status === 'processing') {
+      return res.status(400).json({
+        success: false,
+        message: 'La ricerca è già in elaborazione'
+      });
+    }
+
+    // Aggiorna stato a processing
+    similarLeads.status = 'processing';
+    await similarLeads.save();
+
+    // Risposta immediata
+    res.json({
+      success: true,
+      message: 'Espansione avviata. Il processo continuerà in background.',
+      data: {
+        leadsId: similarLeads._id,
+        status: 'processing',
+        currentResults: similarLeads.leads.length,
+        lastPageSearched: similarLeads.searchStats.lastGooglePageSearched
+      }
+    });
+
+    // Processo asincrono in background
+    const analysisId = similarLeads.originalAnalysis;
+    const analysis = await EcommerceAnalysis.findById(analysisId);
+    
+    if (!analysis) {
+      console.error('❌ Analisi originale non trovata');
+      similarLeads.status = 'failed';
+      await similarLeads.save();
+      return;
+    }
+
+    expandLeadsSearch(similarLeads, analysis, userId).catch(err => {
+      console.error('❌ Errore processo espansione:', err);
+    });
+
+  } catch (error) {
+    console.error('❌ Errore expandSimilarLeads:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Errore nell\'avvio dell\'espansione'
+    });
+  }
+};
+
+// Processo asincrono per espandere la ricerca
+async function expandLeadsSearch(similarLeads, analysis, userId) {
+  try {
+    console.log(`🚀 Inizio espansione ricerca ${similarLeads._id}`);
+
+    const lastPage = similarLeads.searchStats.lastGooglePageSearched || 5;
+    const newMaxPages = lastPage + 5; // Cerca altre 5 pagine (~50 risultati)
+
+    console.log(`📊 Ricerca: pagine ${lastPage + 1}-${newMaxPages} (erano già cercate 1-${lastPage})`);
+
+    // Fai Google Search con più pagine
+    const allGoogleResults = await apifyService.googleSearch(
+      similarLeads.searchQuery,
+      { maxPagesPerQuery: newMaxPages }
+    );
+
+    console.log(`✅ Google Search espansa: ${allGoogleResults.length} risultati totali`);
+
+    // Filtra solo i nuovi URL (che non abbiamo già)
+    const existingDomains = new Set();
+    similarLeads.leads.forEach(lead => {
+      const domain = extractCleanDomain(lead.url);
+      if (domain) existingDomains.add(domain);
+    });
+
+    const newResults = allGoogleResults.filter(result => {
+      const domain = extractCleanDomain(result.url);
+      if (!domain || existingDomains.has(domain)) {
+        return false;
+      }
+      // Aggiungi ai domini visti
+      existingDomains.add(domain);
+      return true;
+    });
+
+    console.log(`🆕 Nuovi URL da analizzare: ${newResults.length} (erano già ${similarLeads.leads.length})`);
+
+    if (newResults.length === 0) {
+      console.log('⚠️  Nessun nuovo URL trovato (tutti duplicati)');
+      similarLeads.status = 'completed';
+      similarLeads.searchStats.lastGooglePageSearched = newMaxPages;
+      await similarLeads.save();
+      return;
+    }
+
+    // Aggiorna stats
+    similarLeads.searchStats.totalUrlsFound += newResults.length;
+
+    // Processa nuovi URL (usa la stessa logica della ricerca originale)
+    for (const result of newResults) {
+      const domain = extractCleanDomain(result.url);
+      
+      // Skip marketplace
+      if (isMarketplace(domain)) {
+        console.log(`⏭️  Skip marketplace: ${domain}`);
+        continue;
+      }
+
+      // Crea lead placeholder
+      const newLead = {
+        url: result.url,
+        title: result.title,
+        description: result.description,
+        googleSearchPosition: result.position,
+        googleSearchDescription: result.description,
+        analysisStatus: 'pending'
+      };
+
+      similarLeads.leads.push(newLead);
+      await similarLeads.save();
+
+      const leadIndex = similarLeads.leads.length - 1;
+
+      // Analizza asincrono
+      processLeadAnalysis(similarLeads._id, leadIndex, result.url).catch(err => {
+        console.error(`❌ Errore analisi ${result.url}:`, err);
+      });
+    }
+
+    // Aggiorna lastGooglePageSearched
+    similarLeads.searchStats.lastGooglePageSearched = newMaxPages;
+    similarLeads.status = 'completed';
+    await similarLeads.save();
+
+    console.log(`✅ Espansione completata: +${newResults.length} nuovi URL in coda di analisi`);
+
+  } catch (error) {
+    console.error('❌ Errore expandLeadsSearch:', error);
+    similarLeads.status = 'failed';
+    await similarLeads.save();
+  }
+}
+
+/**
  * Arricchisci un singolo lead con business contacts e reviews
  * POST /api/analysis/leads/:leadsId/enrich/:leadIndex
  */

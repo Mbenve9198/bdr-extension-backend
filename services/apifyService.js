@@ -254,11 +254,12 @@ class ApifyService {
   // Metodo per Google Search con Apify
   async googleSearch(query, options = {}) {
     try {
-      console.log(`🔍 Google Search con Apify per query: "${query}"`);
+      const maxPages = options.maxPagesPerQuery || 5;
+      console.log(`🔍 Google Search con Apify per query: "${query}" (max ${maxPages} pagine)`);
       
       const input = {
         queries: query,
-        maxPagesPerQuery: 5, // ~10 risultati per pagina = ~50 risultati totali
+        maxPagesPerQuery: maxPages, // Default: 5 pagine (~50 risultati)
         resultsPerPage: 10,
         countryCode: 'it',
         languageCode: 'it',

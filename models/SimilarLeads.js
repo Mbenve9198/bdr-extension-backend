@@ -129,13 +129,19 @@ const similarLeadsSchema = new mongoose.Schema({
       totalUrlsFailed: {
         type: Number,
         default: 0
+      },
+      // Numero di pagine Google già cercate (per espansione ricerca)
+      lastGooglePageSearched: {
+        type: Number,
+        default: 5 // Default: 5 pagine (50 risultati iniziali)
       }
     },
     default: () => ({
       totalUrlsFound: 0,
       totalUrlsAnalyzed: 0,
       totalUrlsQualified: 0,
-      totalUrlsFailed: 0
+      totalUrlsFailed: 0,
+      lastGooglePageSearched: 5
     })
   },
   
