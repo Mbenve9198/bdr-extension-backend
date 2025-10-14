@@ -222,7 +222,23 @@ similarLeadsSchema.index({ 'leads.url': 1 });
 
 // Metodo per ottenere solo i leads qualificati
 similarLeadsSchema.methods.getQualifiedLeads = function() {
-  return this.leads.filter(lead => lead.analysisStatus === 'analyzed');
+  const minItaly = this.filters?.minShipmentsItaly || 100;
+  const minAbroad = this.filters?.minShipmentsAbroad || 30;
+  const maxItaly = this.filters?.maxShipmentsItaly || 10000;
+  
+  return this.leads.filter(lead => {
+    // Deve essere stato analizzato con successo
+    if (lead.analysisStatus !== 'analyzed') return false;
+    
+    // Deve soddisfare i criteri di spedizioni
+    const monthlyItaly = lead.monthlyShipmentsItaly || 0;
+    const monthlyAbroad = lead.monthlyShipmentsAbroad || 0;
+    
+    const qualifies = (monthlyItaly >= minItaly || monthlyAbroad >= minAbroad) &&
+                     monthlyItaly <= maxItaly;
+    
+    return qualifies;
+  });
 };
 
 // Metodo per ottenere summary

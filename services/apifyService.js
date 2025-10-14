@@ -128,6 +128,17 @@ class ApifyService {
       const averageMonthlyVisits = monthlyVisits.size > 0 ? Math.round(totalVisits / monthlyVisits.size) : 0;
       const estimatedMonthlyShipments = Math.round(averageMonthlyVisits * 0.02); // 2% conversion rate mensile
 
+      // DEBUG: Log dati raw
+      console.log(`🔍 [APIFY] Raw SimilarWeb data for ${rawData.url}:`);
+      console.log(`   - estimatedMonthlyVisits entries: ${monthlyVisits.size}`);
+      console.log(`   - averageMonthlyVisits: ${averageMonthlyVisits}`);
+      console.log(`   - topCountries: ${rawData.topCountries?.length || 0} paesi`);
+      if (rawData.topCountries && rawData.topCountries.length > 0) {
+        console.log(`   - Top 3 countries:`, rawData.topCountries.slice(0, 3).map(c => 
+          `${c.countryCode}: ${(c.visitsShare * 100).toFixed(1)}%`
+        ).join(', '));
+      }
+
       // Processa i paesi con calcoli di spedizioni mensili
       const topCountries = rawData.topCountries?.map(country => ({
         ...country,

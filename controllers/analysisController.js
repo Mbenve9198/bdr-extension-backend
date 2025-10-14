@@ -1326,11 +1326,16 @@ async function processLeadAnalysis(leadsId, leadIndex, url) {
       }
     }
 
+    // Debug: verifica dati SimilarWeb
+    console.log(`📊 SimilarWeb data for ${url}:`);
+    console.log(`   - averageMonthlyVisits: ${analysisData.averageMonthlyVisits || analysisData.calculatedMetrics?.averageMonthlyVisits || 0}`);
+    console.log(`   - topCountries: ${analysisData.topCountries?.length || 0} paesi`);
+    
     // Calcola spedizioni per paese
-    const shipmentsByCountry = analysisData.trafficByCountry?.map(country => ({
+    const shipmentsByCountry = analysisData.topCountries?.map(country => ({
       countryName: country.countryName,
       countryCode: country.countryCode,
-      monthlyVisits: country.monthlyVisits,
+      monthlyVisits: country.estimatedVisits || 0,
       visitsShare: country.visitsShare,
       monthlyShipments: country.estimatedShipments || 0
     })) || [];
@@ -1344,11 +1349,13 @@ async function processLeadAnalysis(leadsId, leadIndex, url) {
       .reduce((sum, c) => sum + c.monthlyShipments, 0);
 
     const totalMonthlyShipments = monthlyShipmentsItaly + monthlyShipmentsAbroad;
+    
+    console.log(`📦 Spedizioni calcolate: ITA=${monthlyShipmentsItaly}, EST=${monthlyShipmentsAbroad}, TOT=${totalMonthlyShipments}`);
 
     // Aggiorna il lead
     lead.name = analysisData.name || '';
     lead.category = analysisData.vertical || analysisData.category || '';
-    lead.averageMonthlyVisits = analysisData.averageMonthlyVisits || 0;
+    lead.averageMonthlyVisits = analysisData.averageMonthlyVisits || analysisData.calculatedMetrics?.averageMonthlyVisits || 0;
     lead.shipmentsByCountry = shipmentsByCountry;
     lead.monthlyShipmentsItaly = monthlyShipmentsItaly;
     lead.monthlyShipmentsAbroad = monthlyShipmentsAbroad;
