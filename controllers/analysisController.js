@@ -1286,8 +1286,30 @@ async function enrichLeadProcess(leadsId, leadIndex, url) {
       throw new Error('Nessuna pagina crawlata dal sito');
     }
 
-    // Step 2: Combina il testo di tutte le pagine
-    const combinedText = pages
+    // Step 2: Prioritizza pagine contatti (ordina per rilevanza)
+    const sortedPages = pages.sort((a, b) => {
+      const urlA = (a.url || '').toLowerCase();
+      const urlB = (b.url || '').toLowerCase();
+      const titleA = (a.metadata?.title || '').toLowerCase();
+      const titleB = (b.metadata?.title || '').toLowerCase();
+      
+      // Parole chiave per pagine contatti
+      const contactKeywords = ['contatt', 'contact', 'chi-siamo', 'about', 'info'];
+      
+      const scoreA = contactKeywords.some(kw => urlA.includes(kw) || titleA.includes(kw)) ? 10 : 0;
+      const scoreB = contactKeywords.some(kw => urlB.includes(kw) || titleB.includes(kw)) ? 10 : 0;
+      
+      return scoreB - scoreA; // Ordine decrescente
+    });
+
+    // Log pagine per rilevanza
+    console.log(`📄 Pagine ordinate per rilevanza:`);
+    sortedPages.forEach((page, idx) => {
+      console.log(`  ${idx + 1}. ${page.url} - ${page.text?.length || 0} caratteri`);
+    });
+
+    // Step 3: Combina il testo (priorità a pagine contatti)
+    const combinedText = sortedPages
       .map(page => {
         const pageTitle = page.metadata?.title || '';
         const pageUrl = page.url || '';
@@ -1298,16 +1320,16 @@ async function enrichLeadProcess(leadsId, leadIndex, url) {
 
     console.log(`📄 Testo totale estratto: ${combinedText.length} caratteri da ${pages.length} pagine`);
 
-    // Step 3: Estrai nome azienda dall'URL
+    // Step 4: Estrai nome azienda dall'URL
     const urlObj = new URL(url);
     const domain = urlObj.hostname.replace('www.', '');
     const companyName = domain.split('.')[0].replace(/-/g, ' ');
 
-    // Step 4: Usa Gemini per estrarre email e telefoni
-    console.log(`🤖 Step 2: Estrazione contatti con Gemini...`);
+    // Step 5: Usa Gemini per estrarre email e telefoni
+    console.log(`🤖 Step 3: Estrazione contatti con Gemini...`);
     const contacts = await geminiService.extractContacts(combinedText, companyName);
 
-    // Step 5: Aggiorna il lead con i dati enrichment
+    // Step 6: Aggiorna il lead con i dati enrichment
     const similarLeads = await SimilarLeads.findById(leadsId);
     
     if (!similarLeads) {

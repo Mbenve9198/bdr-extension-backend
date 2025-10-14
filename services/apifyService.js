@@ -341,37 +341,39 @@ class ApifyService {
       const input = {
         startUrls: [{ url: baseUrl }],
         crawlerType: 'playwright:firefox', // Browser per siti dinamici
-        maxCrawlPages: 5, // Massimo 5 pagine (home + contatti + about)
-        // Includi solo pagine rilevanti per contatti
-        includeUrlGlobs: [
-          `${baseUrl}`,
-          `${baseUrl}/`,
-          `${baseUrl}/contatti*`,
-          `${baseUrl}/contact*`,
-          `${baseUrl}/chi-siamo*`,
-          `${baseUrl}/about*`,
-          `${baseUrl}/it/contatti*`,
-          `${baseUrl}/it/contact*`
-        ],
-        // Escludi pagine inutili
+        maxCrawlPages: 10, // Aumentato a 10 per trovare pagina contatti
+        // RIMUOVO includeUrlGlobs - troppo restrittivo!
+        // Uso solo excludeUrlGlobs per evitare pagine inutili
         excludeUrlGlobs: [
           '**/*privacy*',
           '**/*cookie*',
           '**/*termini*',
           '**/*terms*',
-          '**/*product*',
-          '**/*shop*',
-          '**/*cart*'
+          '**/*conditions*',
+          '**/*product/*', // Evita pagine prodotto singolo
+          '**/*prodotto/*',
+          '**/*p/*',
+          '**/*shop/*',
+          '**/*cart*',
+          '**/*checkout*',
+          '**/*login*',
+          '**/*register*',
+          '**/*account*',
+          '**/*wishlist*',
+          '**/*blog/*', // Evita articoli blog
+          '**/*news/*',
+          '**/*category/*',
+          '**/*categoria/*'
         ],
         htmlTransformer: 'readableText', // Estrai solo testo leggibile
         readableTextCharThreshold: 100,
         saveHtml: false,
         saveMarkdown: false,
         saveFiles: false,
-        removeElementsCssSelector: 'nav, footer, script, style, [class*="cookie"], [class*="popup"]',
+        removeElementsCssSelector: 'nav, footer, script, style, [class*="cookie"], [class*="popup"], [role="navigation"]',
         clickElementsCssSelector: '', // Non cliccare elementi
         maxCrawlDepth: 2, // Massimo 2 livelli di profondità
-        maxConcurrency: 1, // Un crawl alla volta
+        maxConcurrency: 2, // Aumentato per velocità
         maxRequestRetries: 2,
         requestTimeoutSecs: 30,
         ...options
