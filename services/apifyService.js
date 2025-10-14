@@ -348,6 +348,108 @@ class ApifyService {
       return null;
     }
   }
+
+  // Enrich un singolo URL con business leads e reviews
+  async enrichUrl(url, options = {}) {
+    try {
+      console.log(`🔍 Enrichment per URL: ${url}`);
+      
+      const input = {
+        queries: url,
+        maxPagesPerQuery: 1,
+        resultsPerPage: 1,
+        countryCode: 'it',
+        languageCode: 'it',
+        mobileResults: false,
+        includeUnfilteredResults: false,
+        saveHtml: false,
+        saveHtmlToKeyValueStore: false,
+        // Abilita enrichment
+        enableBusinessLeadsEnrichment: true,
+        ...options
+      };
+
+      const response = await axios.post(
+        `${this.baseUrl}/acts/${this.googleSearchActorId}/run-sync-get-dataset-items`,
+        input,
+        {
+          headers: {
+            'Authorization': `Bearer ${this.apiToken}`,
+            'Content-Type': 'application/json'
+          },
+          params: {
+            token: this.apiToken
+          },
+          timeout: 180000 // 3 minuti timeout per enrichment
+        }
+      );
+
+      if (response.data && response.data.length > 0) {
+        console.log(`✅ Enrichment completato per ${url}`);
+        return this.processEnrichmentData(response.data[0]);
+      } else {
+        console.log('⚠️  Nessun dato enrichment ricevuto');
+        return null;
+      }
+
+    } catch (error) {
+      console.error(`❌ Errore enrichment Apify:`, error.message);
+      throw this.handleApifyError(error);
+    }
+  }
+
+  // Process enrichment data from Apify response
+  processEnrichmentData(data) {
+    const enrichment = {
+      businessLeads: [],
+      reviews: null,
+      productAds: []
+    };
+
+    // Estrai business leads dai risultati organici
+    if (data.organicResults && data.organicResults.length > 0) {
+      const result = data.organicResults[0];
+      
+      // Business leads (se presenti)
+      if (result.businessLeads && result.businessLeads.length > 0) {
+        enrichment.businessLeads = result.businessLeads.map(lead => ({
+          fullName: lead.fullName || lead.name,
+          workEmail: lead.workEmail || lead.email,
+          phoneNumber: lead.phoneNumber || lead.phone,
+          jobTitle: lead.jobTitle || lead.title,
+          linkedInProfile: lead.linkedInProfile || lead.linkedin,
+          companyName: lead.companyName || lead.company,
+          companyDomain: lead.companyDomain || lead.domain
+        }));
+      }
+
+      // Review ratings (se presenti)
+      if (result.reviews || result.reviewRating) {
+        enrichment.reviews = {
+          rating: result.reviewRating || result.reviews?.rating,
+          reviewCount: result.reviewCount || result.reviews?.count,
+          source: result.reviews?.source || 'Google'
+        };
+      }
+    }
+
+    // Product ads (se presenti)
+    if (data.paidProducts && data.paidProducts.length > 0) {
+      enrichment.productAds = data.paidProducts.map(product => ({
+        title: product.title,
+        price: product.price,
+        description: product.description
+      }));
+    }
+
+    console.log(`📊 Enrichment estratto:`, {
+      businessLeads: enrichment.businessLeads.length,
+      hasReviews: !!enrichment.reviews,
+      productAds: enrichment.productAds.length
+    });
+
+    return enrichment;
+  }
 }
 
 module.exports = new ApifyService(); 

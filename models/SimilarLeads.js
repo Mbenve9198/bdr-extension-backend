@@ -81,7 +81,37 @@ const similarLeadsSchema = new mongoose.Schema({
     error: String,
     
     // Note aggiuntive
-    notes: String
+    notes: String,
+    
+    // Dati enrichment (contatti aziendali)
+    enrichment: {
+      status: {
+        type: String,
+        enum: ['not_enriched', 'enriching', 'enriched', 'failed'],
+        default: 'not_enriched'
+      },
+      enrichedAt: Date,
+      businessLeads: [{
+        fullName: String,
+        workEmail: String,
+        phoneNumber: String,
+        jobTitle: String,
+        linkedInProfile: String,
+        companyName: String,
+        companyDomain: String
+      }],
+      reviews: {
+        rating: Number,
+        reviewCount: Number,
+        source: String // "Google", "Trustpilot", etc.
+      },
+      productAds: [{
+        title: String,
+        price: String,
+        description: String
+      }],
+      error: String
+    }
   }],
   
   // Statistiche della ricerca

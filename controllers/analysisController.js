@@ -1143,7 +1143,7 @@ exports.getMyLeadsList = async (req, res) => {
       message: 'Errore interno del server'
     });
   }
-};
+}; 
 
 /**
  * Cancella una ricerca di leads simili
@@ -1195,4 +1195,145 @@ exports.deleteSimilarLeads = async (req, res) => {
       message: 'Errore nella cancellazione della ricerca'
     });
   }
-}; 
+};
+
+/**
+ * Arricchisci un singolo lead con business contacts e reviews
+ * POST /api/analysis/leads/:leadsId/enrich/:leadIndex
+ */
+exports.enrichSingleLead = async (req, res) => {
+  try {
+    const { leadsId, leadIndex } = req.params;
+    const userId = req.user._id;
+
+    console.log(`🔍 Richiesta enrichment per lead ${leadIndex} nella ricerca ${leadsId}`);
+
+    // Trova la ricerca
+    const similarLeads = await SimilarLeads.findById(leadsId);
+
+    if (!similarLeads) {
+      return res.status(404).json({
+        success: false,
+        message: 'Ricerca non trovata'
+      });
+    }
+
+    // Verifica che l'utente sia il proprietario
+    if (similarLeads.generatedBy.toString() !== userId.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: 'Non hai i permessi per arricchire questo lead'
+      });
+    }
+
+    // Verifica che l'indice del lead sia valido
+    const index = parseInt(leadIndex);
+    if (isNaN(index) || index < 0 || index >= similarLeads.leads.length) {
+      return res.status(400).json({
+        success: false,
+        message: 'Indice lead non valido'
+      });
+    }
+
+    const lead = similarLeads.leads[index];
+
+    // Verifica se già arricchito
+    if (lead.enrichment && lead.enrichment.status === 'enriched') {
+      return res.json({
+        success: true,
+        message: 'Lead già arricchito',
+        data: {
+          leadIndex: index,
+          url: lead.url,
+          enrichment: lead.enrichment
+        }
+      });
+    }
+
+    // Imposta stato enriching
+    lead.enrichment = lead.enrichment || {};
+    lead.enrichment.status = 'enriching';
+    await similarLeads.save();
+
+    // Risposta immediata
+    res.json({
+      success: true,
+      message: 'Enrichment avviato',
+      data: {
+        leadIndex: index,
+        url: lead.url,
+        status: 'enriching'
+      }
+    });
+
+    // Processo in background
+    enrichLeadProcess(leadsId, index, lead.url).catch(err => {
+      console.error('❌ Errore processo enrichment:', err);
+    });
+
+  } catch (error) {
+    console.error('❌ Errore enrichSingleLead:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Errore nell\'avvio dell\'enrichment'
+    });
+  }
+};
+
+// Processo asincrono di enrichment
+async function enrichLeadProcess(leadsId, leadIndex, url) {
+  try {
+    console.log(`🔄 Inizio processo enrichment per ${url}`);
+
+    // Chiama Apify per enrichment
+    const enrichmentData = await apifyService.enrichUrl(url);
+
+    // Aggiorna il lead con i dati enrichment
+    const similarLeads = await SimilarLeads.findById(leadsId);
+    
+    if (!similarLeads) {
+      console.error('❌ Ricerca non trovata durante enrichment');
+      return;
+    }
+
+    const lead = similarLeads.leads[leadIndex];
+    
+    if (!lead) {
+      console.error('❌ Lead non trovato durante enrichment');
+      return;
+    }
+
+    // Aggiorna enrichment
+    lead.enrichment = {
+      status: 'enriched',
+      enrichedAt: new Date(),
+      businessLeads: enrichmentData?.businessLeads || [],
+      reviews: enrichmentData?.reviews || null,
+      productAds: enrichmentData?.productAds || [],
+      error: null
+    };
+
+    await similarLeads.save();
+
+    console.log(`✅ Enrichment completato per ${url}`);
+    console.log(`📊 Business leads trovati: ${lead.enrichment.businessLeads.length}`);
+    console.log(`⭐ Reviews: ${lead.enrichment.reviews ? 'Sì' : 'No'}`);
+
+  } catch (error) {
+    console.error('❌ Errore processo enrichment:', error);
+
+    // Aggiorna lo stato a failed
+    try {
+      const similarLeads = await SimilarLeads.findById(leadsId);
+      if (similarLeads && similarLeads.leads[leadIndex]) {
+        similarLeads.leads[leadIndex].enrichment = {
+          status: 'failed',
+          error: error.message
+        };
+        await similarLeads.save();
+      }
+    } catch (updateError) {
+      console.error('❌ Errore aggiornamento stato failed:', updateError);
+    }
+  }
+} 
