@@ -517,7 +517,12 @@ class ApifyService {
 
     } catch (error) {
       console.error(`❌ Errore BuiltWith check:`, error.message);
+      console.error(`🔍 Stack trace:`, error.stack);
+      console.error(`📡 Response:`, error.response?.data);
+      console.error(`📊 Status:`, error.response?.status);
+      
       // In caso di errore, assumiamo che sia supportato (per non bloccare tutto)
+      console.log(`⚠️  FALLBACK: Accetto lead nonostante errore BuiltWith`);
       return {
         platform: null,
         isSupported: true, // Default: non blocchiamo se BuiltWith fallisce

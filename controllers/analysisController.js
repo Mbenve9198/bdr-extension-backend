@@ -1389,6 +1389,8 @@ async function processLeadAnalysis(leadsId, leadIndex, url) {
     console.log(`🔍 Controllo piattaforma ecommerce per ${url}...`);
     const platformCheck = await apifyService.checkEcommercePlatform(url);
     
+    console.log(`📦 Risultato BuiltWith:`, JSON.stringify(platformCheck, null, 2));
+    
     // Salva info piattaforma
     lead.ecommercePlatform = {
       platform: platformCheck.platform,
@@ -1411,6 +1413,9 @@ async function processLeadAnalysis(leadsId, leadIndex, url) {
     if (platformCheck.platform) {
       lead.notes = (lead.notes ? lead.notes + ' · ' : '') + `Piattaforma: ${platformCheck.platform}`;
     }
+    
+    // Log finale per conferma
+    console.log(`📋 Lead ecommercePlatform salvato:`, lead.ecommercePlatform);
 
     // Calcola spedizioni per paese
     const shipmentsByCountry = analysisData.trafficByCountry?.map(country => ({
