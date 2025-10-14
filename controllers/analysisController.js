@@ -56,11 +56,14 @@ function extractCleanDomain(url) {
     }
     
     // Altrimenti estrai normalmente
-    const urlObj = new URL(url);
+    // Aggiungi protocollo se manca
+    const urlWithProtocol = url.startsWith('http') ? url : `https://${url}`;
+    const urlObj = new URL(urlWithProtocol);
     return urlObj.hostname.replace(/^www\./i, '').toLowerCase();
   } catch (error) {
     console.error('Errore estrazione dominio:', error);
-    return url.toLowerCase();
+    // Fallback: rimuovi www. e protocollo manualmente
+    return url.replace(/^(https?:\/\/)?(www\.)?/i, '').split('/')[0].toLowerCase();
   }
 }
 
@@ -1273,6 +1276,110 @@ exports.expandSimilarLeads = async (req, res) => {
     });
   }
 };
+
+// Processo asincrono per analizzare un singolo lead
+async function processLeadAnalysis(leadsId, leadIndex, url) {
+  try {
+    console.log(`🔄 Analisi lead ${leadIndex}: ${url}`);
+
+    // Trova la ricerca
+    const similarLeads = await SimilarLeads.findById(leadsId);
+    if (!similarLeads) {
+      console.error('❌ SimilarLeads non trovato');
+      return;
+    }
+
+    const lead = similarLeads.leads[leadIndex];
+    if (!lead) {
+      console.error('❌ Lead non trovato all\'indice', leadIndex);
+      return;
+    }
+
+    // Controlla se esiste già un'analisi per questo dominio
+    const domain = extractCleanDomain(url);
+    const existingAnalysis = await EcommerceAnalysis.findOne({
+      url: new RegExp(domain.replace(/\./g, '\\.'), 'i')
+    });
+
+    let analysisData;
+
+    if (existingAnalysis) {
+      console.log(`♻️  Riuso analisi esistente per ${domain}`);
+      analysisData = existingAnalysis;
+      lead.notes = (lead.notes ? lead.notes + ' · ' : '') + 'Analisi riutilizzata dal database';
+    } else {
+      // Nuova analisi con Apify
+      console.log(`🆕 Nuova analisi per ${url}`);
+      analysisData = await apifyService.runAnalysis(url);
+    }
+
+    // Calcola spedizioni per paese
+    const shipmentsByCountry = analysisData.trafficByCountry?.map(country => ({
+      countryName: country.countryName,
+      countryCode: country.countryCode,
+      monthlyVisits: country.monthlyVisits,
+      visitsShare: country.visitsShare,
+      monthlyShipments: country.estimatedShipments || 0
+    })) || [];
+
+    const monthlyShipmentsItaly = shipmentsByCountry
+      .filter(c => c.countryCode === 'IT')
+      .reduce((sum, c) => sum + c.monthlyShipments, 0);
+
+    const monthlyShipmentsAbroad = shipmentsByCountry
+      .filter(c => c.countryCode !== 'IT')
+      .reduce((sum, c) => sum + c.monthlyShipments, 0);
+
+    const totalMonthlyShipments = monthlyShipmentsItaly + monthlyShipmentsAbroad;
+
+    // Aggiorna il lead
+    lead.name = analysisData.name || '';
+    lead.category = analysisData.vertical || analysisData.category || '';
+    lead.averageMonthlyVisits = analysisData.averageMonthlyVisits || 0;
+    lead.shipmentsByCountry = shipmentsByCountry;
+    lead.monthlyShipmentsItaly = monthlyShipmentsItaly;
+    lead.monthlyShipmentsAbroad = monthlyShipmentsAbroad;
+    lead.totalMonthlyShipments = totalMonthlyShipments;
+    lead.analysisStatus = 'analyzed';
+    lead.analyzedAt = new Date();
+
+    await similarLeads.save();
+
+    // Controlla se qualifica
+    const minItaly = similarLeads.filters?.minShipmentsItaly || 100;
+    const minAbroad = similarLeads.filters?.minShipmentsAbroad || 30;
+    const maxItaly = similarLeads.filters?.maxShipmentsItaly || 10000;
+
+    const qualifies = (monthlyShipmentsItaly >= minItaly || monthlyShipmentsAbroad >= minAbroad) &&
+                     monthlyShipmentsItaly <= maxItaly;
+
+    if (qualifies) {
+      similarLeads.searchStats.totalUrlsQualified += 1;
+      console.log(`✅ Lead qualificato: ${url} (ITA: ${monthlyShipmentsItaly}, EST: ${monthlyShipmentsAbroad})`);
+    } else {
+      console.log(`❌ Lead NON qualificato: ${url} (ITA: ${monthlyShipmentsItaly}, EST: ${monthlyShipmentsAbroad})`);
+    }
+
+    similarLeads.searchStats.totalUrlsAnalyzed += 1;
+    await similarLeads.save();
+
+  } catch (error) {
+    console.error(`❌ Errore analisi lead ${url}:`, error.message);
+
+    // Aggiorna lo stato a failed
+    try {
+      const similarLeads = await SimilarLeads.findById(leadsId);
+      if (similarLeads && similarLeads.leads[leadIndex]) {
+        similarLeads.leads[leadIndex].analysisStatus = 'failed';
+        similarLeads.leads[leadIndex].error = error.message;
+        similarLeads.searchStats.totalUrlsFailed += 1;
+        await similarLeads.save();
+      }
+    } catch (updateError) {
+      console.error('❌ Errore aggiornamento failed:', updateError);
+    }
+  }
+}
 
 // Processo asincrono per espandere la ricerca
 async function expandLeadsSearch(similarLeads, analysis, userId) {
