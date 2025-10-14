@@ -49,5 +49,6 @@ router.post('/:id/similar', analysisController.findSimilarEcommerce);
 // Gestione leads generati
 router.get('/leads/my-leads', analysisController.getMyLeadsList);
 router.get('/leads/:leadsId', analysisController.getSimilarLeads);
+router.delete('/leads/:leadsId', analysisController.deleteSimilarLeads);
 
 module.exports = router; 

@@ -1143,4 +1143,56 @@ exports.getMyLeadsList = async (req, res) => {
       message: 'Errore interno del server'
     });
   }
+};
+
+/**
+ * Cancella una ricerca di leads simili
+ * DELETE /api/analysis/leads/:leadsId
+ */
+exports.deleteSimilarLeads = async (req, res) => {
+  try {
+    const { leadsId } = req.params;
+    const userId = req.user._id;
+
+    console.log(`🗑️ Richiesta cancellazione leads: ${leadsId} da utente ${userId}`);
+
+    // Trova la ricerca
+    const similarLeads = await SimilarLeads.findById(leadsId);
+
+    if (!similarLeads) {
+      return res.status(404).json({
+        success: false,
+        message: 'Ricerca non trovata'
+      });
+    }
+
+    // Verifica che l'utente sia il proprietario
+    if (similarLeads.generatedBy.toString() !== userId.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: 'Non hai i permessi per cancellare questa ricerca'
+      });
+    }
+
+    // Cancella la ricerca
+    await SimilarLeads.findByIdAndDelete(leadsId);
+
+    console.log(`✅ Ricerca ${leadsId} cancellata con successo`);
+
+    res.json({
+      success: true,
+      message: 'Ricerca cancellata con successo',
+      data: {
+        deletedId: leadsId,
+        searchQuery: similarLeads.searchQuery
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Errore deleteSimilarLeads:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Errore nella cancellazione della ricerca'
+    });
+  }
 }; 
