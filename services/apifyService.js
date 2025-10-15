@@ -590,6 +590,36 @@ class ApifyService {
   }
 
   /**
+   * Pulisce un URL Amazon rimuovendo parametri di tracking non necessari
+   * @param {string} amazonUrl - URL Amazon originale
+   * @returns {string} - URL pulito
+   */
+  cleanAmazonUrl(amazonUrl) {
+    try {
+      const url = new URL(amazonUrl);
+      
+      // Parametri essenziali da mantenere
+      const essentialParams = ['k', 'node', 'i', 'rh', 's', 'page'];
+      
+      // Crea nuova URLSearchParams solo con parametri essenziali
+      const cleanParams = new URLSearchParams();
+      essentialParams.forEach(param => {
+        if (url.searchParams.has(param)) {
+          cleanParams.set(param, url.searchParams.get(param));
+        }
+      });
+      
+      // Ricostruisci l'URL
+      const cleanUrl = `${url.origin}${url.pathname}${cleanParams.toString() ? '?' + cleanParams.toString() : ''}`;
+      return cleanUrl;
+      
+    } catch (error) {
+      console.warn('⚠️  Errore pulizia URL, uso originale:', error.message);
+      return amazonUrl;
+    }
+  }
+
+  /**
    * Scrapa prodotti Amazon usando Free Amazon Product Scraper
    * @param {string} amazonUrl - URL Amazon (categoria, ricerca, etc)
    * @param {object} options - Opzioni scraper
@@ -599,19 +629,15 @@ class ApifyService {
     try {
       console.log(`🛒 Amazon Product Scraper per: ${amazonUrl}`);
       
-      // Determina se è un URL di ricerca o categoria
-      const isSearchUrl = amazonUrl.includes('/s?') || amazonUrl.includes('/s/');
-      const isCategoryUrl = amazonUrl.includes('/b/') || amazonUrl.includes('/gp/');
+      // Pulisci l'URL rimuovendo parametri di tracking non necessari
+      const cleanedUrl = this.cleanAmazonUrl(amazonUrl);
+      console.log(`🧹 URL pulito: ${cleanedUrl}`);
       
+      // L'actor "Free Amazon Product Scraper" accetta SOLO categoryUrls
       const input = {
-        // Usa il campo appropriato in base al tipo di URL
-        ...(isSearchUrl ? { searchUrls: [amazonUrl] } : {}),
-        ...(isCategoryUrl ? { categoryUrls: [amazonUrl] } : {}),
-        // Se non è né ricerca né categoria, prova categoryUrls
-        ...(!isSearchUrl && !isCategoryUrl ? { categoryUrls: [amazonUrl] } : {}),
-        
-        maxItems: options.maxItems || 50, // Default: 50 prodotti
-        proxy: {
+        categoryUrls: [cleanedUrl],
+        maxItems: options.maxItems || 50,
+        proxyConfiguration: {
           useApifyProxy: true,
           apifyProxyGroups: ['RESIDENTIAL']
         },
@@ -619,7 +645,6 @@ class ApifyService {
       };
 
       console.log(`📦 Scraping Amazon: max ${input.maxItems} prodotti`);
-      console.log(`🔍 Tipo URL: ${isSearchUrl ? 'RICERCA' : isCategoryUrl ? 'CATEGORIA' : 'ALTRO'}`);
       console.log(`📋 Input Apify:`, JSON.stringify(input, null, 2));
 
       const response = await axios.post(
