@@ -599,8 +599,17 @@ class ApifyService {
     try {
       console.log(`🛒 Amazon Product Scraper per: ${amazonUrl}`);
       
+      // Determina se è un URL di ricerca o categoria
+      const isSearchUrl = amazonUrl.includes('/s?') || amazonUrl.includes('/s/');
+      const isCategoryUrl = amazonUrl.includes('/b/') || amazonUrl.includes('/gp/');
+      
       const input = {
-        categoryUrls: [amazonUrl], // L'actor richiede categoryUrls, non startUrls
+        // Usa il campo appropriato in base al tipo di URL
+        ...(isSearchUrl ? { searchUrls: [amazonUrl] } : {}),
+        ...(isCategoryUrl ? { categoryUrls: [amazonUrl] } : {}),
+        // Se non è né ricerca né categoria, prova categoryUrls
+        ...(!isSearchUrl && !isCategoryUrl ? { categoryUrls: [amazonUrl] } : {}),
+        
         maxItems: options.maxItems || 50, // Default: 50 prodotti
         proxy: {
           useApifyProxy: true,
@@ -610,6 +619,8 @@ class ApifyService {
       };
 
       console.log(`📦 Scraping Amazon: max ${input.maxItems} prodotti`);
+      console.log(`🔍 Tipo URL: ${isSearchUrl ? 'RICERCA' : isCategoryUrl ? 'CATEGORIA' : 'ALTRO'}`);
+      console.log(`📋 Input Apify:`, JSON.stringify(input, null, 2));
 
       const response = await axios.post(
         `${this.baseUrl}/acts/junglee~free-amazon-product-scraper/run-sync-get-dataset-items`,
