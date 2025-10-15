@@ -442,3 +442,4 @@ Per problemi o domande:
 - Email: support@bdr-extension.com
 - Slack: #bdr-extension-support
 
+

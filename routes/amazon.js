@@ -36,3 +36,4 @@ router.delete('/sellers/:sellersId', amazonController.deleteAmazonSellers);
 
 module.exports = router;
 
+

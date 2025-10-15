@@ -196,3 +196,4 @@ amazonSellersSchema.methods.getSummary = function() {
 
 module.exports = mongoose.model('AmazonSellers', amazonSellersSchema);
 
+

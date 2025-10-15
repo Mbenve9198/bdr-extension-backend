@@ -130,3 +130,4 @@ Response:
 3. **Monitora i log** per vedere il progresso
 4. **Controlla i costi** Apify/Gemini nel rispettivo dashboard
 
+
