@@ -588,6 +588,148 @@ class ApifyService {
       return null;
     }
   }
+
+  /**
+   * Scrapa prodotti Amazon usando Free Amazon Product Scraper
+   * @param {string} amazonUrl - URL Amazon (categoria, ricerca, etc)
+   * @param {object} options - Opzioni scraper
+   * @returns {Promise<Array>} - Array di prodotti con dati venditori
+   */
+  async scrapeAmazonProducts(amazonUrl, options = {}) {
+    try {
+      console.log(`🛒 Amazon Product Scraper per: ${amazonUrl}`);
+      
+      const input = {
+        startUrls: [{ url: amazonUrl }],
+        maxItems: options.maxItems || 50, // Default: 50 prodotti
+        proxy: {
+          useApifyProxy: true,
+          apifyProxyGroups: ['RESIDENTIAL']
+        },
+        ...options
+      };
+
+      console.log(`📦 Scraping Amazon: max ${input.maxItems} prodotti`);
+
+      const response = await axios.post(
+        `${this.baseUrl}/acts/junglee~free-amazon-product-scraper/run-sync-get-dataset-items`,
+        input,
+        {
+          headers: {
+            'Authorization': `Bearer ${this.apiToken}`,
+            'Content-Type': 'application/json'
+          },
+          params: {
+            token: this.apiToken
+          },
+          timeout: 300000 // 5 minuti timeout (Amazon è lento)
+        }
+      );
+
+      if (response.data && response.data.length > 0) {
+        console.log(`✅ Amazon scraping completato: ${response.data.length} prodotti`);
+        
+        // Filtra e processa i risultati
+        const products = response.data
+          .filter(p => p.seller && p.seller.id && p.seller.url) // Solo prodotti con venditore
+          .map(p => ({
+            asin: p.asin,
+            title: p.title,
+            url: p.url,
+            price: p.price,
+            seller: {
+              name: p.seller.name,
+              id: p.seller.id,
+              url: p.seller.url
+            }
+          }));
+        
+        console.log(`📊 Prodotti con venditori: ${products.length}`);
+        return products;
+      } else {
+        console.log('⚠️  Nessun prodotto trovato');
+        return [];
+      }
+
+    } catch (error) {
+      console.error(`❌ Errore Amazon Product Scraper:`, error.message);
+      throw this.handleApifyError(error);
+    }
+  }
+
+  /**
+   * Crawla una seller page Amazon per estrarre il testo
+   * @param {string} sellerUrl - URL seller page Amazon
+   * @param {string} marketplace - Marketplace (amazon.it, amazon.fr, etc)
+   * @returns {Promise<string>} - Testo estratto dalla pagina
+   */
+  async crawlAmazonSellerPage(sellerUrl, marketplace = 'amazon.it') {
+    try {
+      console.log(`📄 Crawl seller page: ${sellerUrl}`);
+      
+      // Assicurati che l'URL sia completo
+      let fullUrl = sellerUrl;
+      if (!sellerUrl.startsWith('http')) {
+        fullUrl = `https://www.${marketplace}${sellerUrl.startsWith('/') ? '' : '/'}${sellerUrl}`;
+      }
+      
+      console.log(`🔗 URL completo: ${fullUrl}`);
+      
+      const input = {
+        startUrls: [{ url: fullUrl }],
+        crawlerType: 'playwright:firefox', // Browser per siti dinamici
+        maxCrawlPages: 1, // Solo questa pagina
+        maxCrawlDepth: 0, // Nessun link interno
+        htmlTransformer: 'readableText',
+        readableTextCharThreshold: 50,
+        saveHtml: false,
+        saveMarkdown: false,
+        saveFiles: false,
+        removeElementsCssSelector: 'nav, footer, script, style, [class*="cookie"], header, [role="navigation"]',
+        maxConcurrency: 1,
+        maxRequestRetries: 2,
+        requestTimeoutSecs: 30,
+        proxyConfiguration: {
+          useApifyProxy: true,
+          apifyProxyGroups: ['RESIDENTIAL']
+        }
+      };
+
+      console.log(`🕷️  Crawl avviato...`);
+
+      const response = await axios.post(
+        `${this.baseUrl}/acts/apify~website-content-crawler/run-sync-get-dataset-items`,
+        input,
+        {
+          headers: {
+            'Authorization': `Bearer ${this.apiToken}`,
+            'Content-Type': 'application/json'
+          },
+          params: {
+            token: this.apiToken
+          },
+          timeout: 120000 // 2 minuti timeout
+        }
+      );
+
+      if (response.data && response.data.length > 0) {
+        const pageText = response.data[0].text || '';
+        console.log(`✅ Seller page crawlata: ${pageText.length} caratteri`);
+        
+        if (pageText.length < 100) {
+          throw new Error('Pagina troppo corta o vuota');
+        }
+        
+        return pageText;
+      } else {
+        throw new Error('Nessun contenuto estratto dalla seller page');
+      }
+
+    } catch (error) {
+      console.error(`❌ Errore crawl seller page:`, error.message);
+      throw this.handleApifyError(error);
+    }
+  }
 }
 
 module.exports = new ApifyService(); 

@@ -56,6 +56,7 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/users', require('./routes/users'));
 app.use('/api/prospects', require('./routes/prospects'));
 app.use('/api/analysis', require('./routes/analysis'));
+app.use('/api/amazon', require('./routes/amazon'));
 
 // Route di base
 app.get('/', (req, res) => {
@@ -66,7 +67,8 @@ app.get('/', (req, res) => {
       auth: '/api/auth',
       users: '/api/users', 
       prospects: '/api/prospects',
-      analysis: '/api/analysis'
+      analysis: '/api/analysis',
+      amazon: '/api/amazon'
     }
   });
 });
