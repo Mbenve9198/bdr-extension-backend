@@ -633,14 +633,13 @@ class ApifyService {
       const cleanedUrl = this.cleanAmazonUrl(amazonUrl);
       console.log(`🧹 URL pulito: ${cleanedUrl}`);
       
-      // L'actor "Free Amazon Product Scraper" accetta SOLO categoryUrls
+      // L'actor "Free Amazon Product Scraper" accetta categoryUrls come array di oggetti
       const input = {
-        categoryUrls: [cleanedUrl],
+        categoryUrls: [{
+          url: cleanedUrl,
+          method: 'GET'
+        }],
         maxItems: options.maxItems || 50,
-        proxyConfiguration: {
-          useApifyProxy: true,
-          apifyProxyGroups: ['RESIDENTIAL']
-        },
         ...options
       };
 
