@@ -645,10 +645,11 @@ class ApifyService {
 
       console.log(`📦 Scraping Amazon: max ${input.maxItems} prodotti`);
       console.log(`📋 Input Apify:`, JSON.stringify(input, null, 2));
-      console.log(`⏳ Chiamata Apify in corso... (timeout: 5 minuti)`);
+      console.log(`🚀 Avvio actor Apify in modalità ASYNC...`);
 
-      const response = await axios.post(
-        `${this.baseUrl}/acts/junglee~free-amazon-product-scraper/run-sync-get-dataset-items`,
+      // Avvia l'actor in modalità ASYNC
+      const runResponse = await axios.post(
+        `${this.baseUrl}/acts/junglee~free-amazon-product-scraper/runs`,
         input,
         {
           headers: {
@@ -656,20 +657,41 @@ class ApifyService {
             'Content-Type': 'application/json'
           },
           params: {
-            token: this.apiToken
+            token: this.apiToken,
+            waitForFinish: 600 // Aspetta fino a 10 minuti
           },
-          timeout: 300000 // 5 minuti timeout (Amazon è lento)
+          timeout: 660000 // 11 minuti timeout totale
         }
       );
 
-      console.log(`📡 Risposta ricevuta da Apify`);
-      console.log(`📊 Numero risultati: ${response.data?.length || 0}`);
+      console.log(`✅ Actor avviato con ID: ${runResponse.data.data.id}`);
+      console.log(`📊 Status: ${runResponse.data.data.status}`);
 
-      if (response.data && response.data.length > 0) {
-        console.log(`✅ Amazon scraping completato: ${response.data.length} prodotti`);
+      // Estrai i risultati dal dataset
+      const datasetId = runResponse.data.data.defaultDatasetId;
+      console.log(`📦 Dataset ID: ${datasetId}`);
+
+      const datasetResponse = await axios.get(
+        `${this.baseUrl}/datasets/${datasetId}/items`,
+        {
+          headers: {
+            'Authorization': `Bearer ${this.apiToken}`
+          },
+          params: {
+            token: this.apiToken
+          }
+        }
+      );
+
+      const results = datasetResponse.data;
+      console.log(`📡 Risposta ricevuta da Apify`);
+      console.log(`📊 Numero risultati: ${results?.length || 0}`);
+
+      if (results && results.length > 0) {
+        console.log(`✅ Amazon scraping completato: ${results.length} prodotti`);
         
         // Filtra e processa i risultati
-        const products = response.data
+        const products = results
           .filter(p => p.seller && p.seller.id && p.seller.url) // Solo prodotti con venditore
           .map(p => ({
             asin: p.asin,
