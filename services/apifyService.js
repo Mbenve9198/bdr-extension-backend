@@ -738,25 +738,37 @@ class ApifyService {
       
       const input = {
         startUrls: [{ url: fullUrl }],
-        crawlerType: 'playwright:firefox', // Browser per siti dinamici
+        crawlerType: 'playwright:chrome', // Chrome più compatibile con Amazon
         maxCrawlPages: 1, // Solo questa pagina
         maxCrawlDepth: 0, // Nessun link interno
         htmlTransformer: 'readableText',
-        readableTextCharThreshold: 50,
+        readableTextCharThreshold: 30,
         saveHtml: false,
         saveMarkdown: false,
         saveFiles: false,
-        removeElementsCssSelector: 'nav, footer, script, style, [class*="cookie"], header, [role="navigation"]',
+        // NON rimuovere troppo - potrebbe contenere dati compliance
+        removeElementsCssSelector: 'nav, script, style, [class*="cookie"]',
         maxConcurrency: 1,
-        maxRequestRetries: 2,
-        requestTimeoutSecs: 30,
+        maxRequestRetries: 3,
+        requestTimeoutSecs: 60,
+        // ⚡ IMPORTANTE: Aspetta caricamento dinamico
+        waitUntil: ['networkidle', 'domcontentloaded'],
+        // Aspetta 5 secondi per il rendering JavaScript
+        waitForSelector: 'body',
+        additionalWaitForRequestsMillis: 5000,
+        // User Agent realistico
+        customUserAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         proxyConfiguration: {
           useApifyProxy: true,
           apifyProxyGroups: ['RESIDENTIAL']
         }
       };
 
-      console.log(`🕷️  Crawl avviato...`);
+      console.log(`🕷️  Crawl avviato con configurazione:`);
+      console.log(`   - Browser: ${input.crawlerType}`);
+      console.log(`   - Timeout: ${input.requestTimeoutSecs}s`);
+      console.log(`   - WaitUntil: ${input.waitUntil.join(', ')}`);
+      console.log(`   - Extra wait: ${input.additionalWaitForRequestsMillis}ms`);
 
       const response = await axios.post(
         `${this.baseUrl}/acts/apify~website-content-crawler/run-sync-get-dataset-items`,
@@ -769,16 +781,24 @@ class ApifyService {
           params: {
             token: this.apiToken
           },
-          timeout: 120000 // 2 minuti timeout
+          timeout: 180000 // 3 minuti timeout (aumentato per il wait time)
         }
       );
 
       if (response.data && response.data.length > 0) {
         const pageText = response.data[0].text || '';
+        const htmlSnapshot = response.data[0].html || '';
+        
         console.log(`✅ Seller page crawlata: ${pageText.length} caratteri`);
+        console.log(`📄 HTML length: ${htmlSnapshot.length} caratteri`);
+        
+        // Log primi 500 caratteri per debug
+        console.log(`📝 Prime 500 chars del testo:`);
+        console.log(pageText.slice(0, 500));
         
         if (pageText.length < 100) {
-          throw new Error('Pagina troppo corta o vuota');
+          console.warn(`⚠️  ATTENZIONE: Pagina molto corta (${pageText.length} chars)`);
+          console.warn(`   Potrebbe essere bloccata o vuota. Ritorno comunque il testo.`);
         }
         
         return pageText;
