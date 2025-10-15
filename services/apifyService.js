@@ -645,6 +645,7 @@ class ApifyService {
 
       console.log(`📦 Scraping Amazon: max ${input.maxItems} prodotti`);
       console.log(`📋 Input Apify:`, JSON.stringify(input, null, 2));
+      console.log(`⏳ Chiamata Apify in corso... (timeout: 5 minuti)`);
 
       const response = await axios.post(
         `${this.baseUrl}/acts/junglee~free-amazon-product-scraper/run-sync-get-dataset-items`,
@@ -660,6 +661,9 @@ class ApifyService {
           timeout: 300000 // 5 minuti timeout (Amazon è lento)
         }
       );
+
+      console.log(`📡 Risposta ricevuta da Apify`);
+      console.log(`📊 Numero risultati: ${response.data?.length || 0}`);
 
       if (response.data && response.data.length > 0) {
         console.log(`✅ Amazon scraping completato: ${response.data.length} prodotti`);
