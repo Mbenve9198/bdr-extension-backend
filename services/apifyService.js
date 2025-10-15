@@ -600,7 +600,7 @@ class ApifyService {
       console.log(`🛒 Amazon Product Scraper per: ${amazonUrl}`);
       
       const input = {
-        startUrls: [{ url: amazonUrl }],
+        categoryUrls: [amazonUrl], // L'actor richiede categoryUrls, non startUrls
         maxItems: options.maxItems || 50, // Default: 50 prodotti
         proxy: {
           useApifyProxy: true,
