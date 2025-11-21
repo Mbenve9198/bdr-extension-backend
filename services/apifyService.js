@@ -225,14 +225,35 @@ class ApifyService {
         vertical = categoryParts[categoryParts.length - 1].replace(/_/g, ' ');
       }
 
-      // 🆕 Gestisci countryRank (nuovo actor ha formato diverso)
-      let countryRank = rawData.countryRank;
+      // 🆕 Gestisci rankings (nuovo actor ha formato diverso dal modello)
+      // Il modello si aspetta oggetti, il nuovo actor restituisce valori semplici
+      
+      // globalRank: numero → { rank: Number }
+      let globalRank = null;
+      if (rawData.globalRank) {
+        globalRank = typeof rawData.globalRank === 'object' 
+          ? rawData.globalRank 
+          : { rank: Number(rawData.globalRank) };
+      }
+
+      // countryRank: oggetto con Country, CountryCode, Rank
+      let countryRank = null;
       if (rawData.countryRank && typeof rawData.countryRank === 'object') {
         countryRank = {
-          Country: rawData.countryRank.Country,
-          CountryCode: rawData.countryRank.CountryCode,
-          Rank: rawData.countryRank.Rank
+          countryCode: rawData.countryRank.CountryCode || rawData.countryRank.countryCode,
+          rank: Number(rawData.countryRank.Rank || rawData.countryRank.rank)
         };
+      }
+
+      // categoryRank: stringa/numero → { category: String, rank: Number }
+      let categoryRank = null;
+      if (rawData.categoryRank) {
+        categoryRank = typeof rawData.categoryRank === 'object'
+          ? rawData.categoryRank
+          : { 
+              category: rawData.category || 'unknown',
+              rank: Number(rawData.categoryRank)
+            };
       }
 
       return {
@@ -250,10 +271,10 @@ class ApifyService {
         previewMobile: rawData.previewMobile,
         screenshot: rawData.screenshot,
         
-        // Rankings
-        globalRank: rawData.globalRank,
+        // Rankings (formato adattato al modello)
+        globalRank: globalRank,
         countryRank: countryRank,
-        categoryRank: rawData.categoryRank,
+        categoryRank: categoryRank,
         globalCategoryRank: rawData.globalCategoryRank,
         
         // Engagement
