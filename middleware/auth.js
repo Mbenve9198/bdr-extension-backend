@@ -42,9 +42,31 @@ exports.protect = async (req, res, next) => {
     next();
   } catch (error) {
     console.error('Errore autenticazione:', error);
+    
+    // Gestisci specificamente il token scaduto
+    if (error.name === 'TokenExpiredError') {
+      return res.status(401).json({
+        success: false,
+        message: 'Token scaduto. Effettua nuovamente il login.',
+        code: 'TOKEN_EXPIRED',
+        expiredAt: error.expiredAt
+      });
+    }
+    
+    // Altri errori di token
+    if (error.name === 'JsonWebTokenError') {
+      return res.status(401).json({
+        success: false,
+        message: 'Token non valido.',
+        code: 'INVALID_TOKEN'
+      });
+    }
+    
+    // Errore generico
     res.status(401).json({
       success: false,
-      message: 'Token non valido.'
+      message: 'Autenticazione fallita.',
+      code: 'AUTH_FAILED'
     });
   }
 };
