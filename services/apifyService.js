@@ -3,9 +3,69 @@ const axios = require('axios');
 class ApifyService {
   constructor() {
     this.apiToken = process.env.APIFY_TOKEN;
-    this.actorId = 'tri_angle~fast-similarweb-scraper';
+    this.actorId = 'curious_coder~similarweb-scraper';
     this.googleSearchActorId = 'apify~google-search-scraper';
     this.baseUrl = 'https://api.apify.com/v2';
+  }
+
+  // Mapping country code ISO 3166-1 numeric → Country Name
+  getCountryName(countryCode) {
+    const countryMap = {
+      4: 'Afghanistan', 8: 'Albania', 12: 'Algeria', 20: 'Andorra', 24: 'Angola',
+      28: 'Antigua and Barbuda', 31: 'Azerbaijan', 32: 'Argentina', 36: 'Australia',
+      40: 'Austria', 44: 'Bahamas', 48: 'Bahrain', 50: 'Bangladesh', 51: 'Armenia',
+      52: 'Barbados', 56: 'Belgium', 60: 'Bermuda', 64: 'Bhutan', 68: 'Bolivia',
+      70: 'Bosnia and Herzegovina', 72: 'Botswana', 76: 'Brazil', 84: 'Belize',
+      86: 'British Indian Ocean Territory', 90: 'Solomon Islands', 92: 'British Virgin Islands',
+      96: 'Brunei', 100: 'Bulgaria', 104: 'Myanmar', 108: 'Burundi', 112: 'Belarus',
+      116: 'Cambodia', 120: 'Cameroon', 124: 'Canada', 132: 'Cape Verde', 136: 'Cayman Islands',
+      140: 'Central African Republic', 144: 'Sri Lanka', 148: 'Chad', 152: 'Chile',
+      156: 'China', 158: 'Taiwan', 170: 'Colombia', 174: 'Comoros', 175: 'Mayotte',
+      178: 'Congo', 180: 'Democratic Republic of the Congo', 184: 'Cook Islands',
+      188: 'Costa Rica', 191: 'Croatia', 192: 'Cuba', 196: 'Cyprus', 203: 'Czech Republic',
+      204: 'Benin', 208: 'Denmark', 212: 'Dominica', 214: 'Dominican Republic',
+      218: 'Ecuador', 222: 'El Salvador', 226: 'Equatorial Guinea', 231: 'Ethiopia',
+      232: 'Eritrea', 233: 'Estonia', 234: 'Faroe Islands', 238: 'Falkland Islands',
+      242: 'Fiji', 246: 'Finland', 250: 'France', 254: 'French Guiana', 258: 'French Polynesia',
+      262: 'Djibouti', 266: 'Gabon', 268: 'Georgia', 270: 'Gambia', 275: 'Palestine',
+      276: 'Germany', 288: 'Ghana', 292: 'Gibraltar', 296: 'Kiribati', 300: 'Greece',
+      304: 'Greenland', 308: 'Grenada', 312: 'Guadeloupe', 316: 'Guam', 320: 'Guatemala',
+      324: 'Guinea', 328: 'Guyana', 332: 'Haiti', 336: 'Vatican City', 340: 'Honduras',
+      344: 'Hong Kong', 348: 'Hungary', 352: 'Iceland', 356: 'India', 360: 'Indonesia',
+      364: 'Iran', 368: 'Iraq', 372: 'Ireland', 376: 'Israel', 380: 'Italy',
+      384: 'Ivory Coast', 388: 'Jamaica', 392: 'Japan', 398: 'Kazakhstan', 400: 'Jordan',
+      404: 'Kenya', 408: 'North Korea', 410: 'South Korea', 414: 'Kuwait', 417: 'Kyrgyzstan',
+      418: 'Laos', 422: 'Lebanon', 426: 'Lesotho', 428: 'Latvia', 430: 'Liberia',
+      434: 'Libya', 438: 'Liechtenstein', 440: 'Lithuania', 442: 'Luxembourg', 446: 'Macau',
+      450: 'Madagascar', 454: 'Malawi', 458: 'Malaysia', 462: 'Maldives', 466: 'Mali',
+      470: 'Malta', 474: 'Martinique', 478: 'Mauritania', 480: 'Mauritius', 484: 'Mexico',
+      492: 'Monaco', 496: 'Mongolia', 498: 'Moldova', 499: 'Montenegro', 500: 'Montserrat',
+      504: 'Morocco', 508: 'Mozambique', 512: 'Oman', 516: 'Namibia', 520: 'Nauru',
+      524: 'Nepal', 528: 'Netherlands', 531: 'Curaçao', 533: 'Aruba', 534: 'Sint Maarten',
+      540: 'New Caledonia', 548: 'Vanuatu', 554: 'New Zealand', 558: 'Nicaragua',
+      562: 'Niger', 566: 'Nigeria', 570: 'Niue', 574: 'Norfolk Island', 578: 'Norway',
+      580: 'Northern Mariana Islands', 583: 'Micronesia', 584: 'Marshall Islands',
+      585: 'Palau', 586: 'Pakistan', 591: 'Panama', 598: 'Papua New Guinea',
+      600: 'Paraguay', 604: 'Peru', 608: 'Philippines', 612: 'Pitcairn Islands',
+      616: 'Poland', 620: 'Portugal', 624: 'Guinea-Bissau', 626: 'Timor-Leste',
+      630: 'Puerto Rico', 634: 'Qatar', 638: 'Réunion', 642: 'Romania', 643: 'Russia',
+      646: 'Rwanda', 652: 'Saint Barthélemy', 654: 'Saint Helena', 659: 'Saint Kitts and Nevis',
+      660: 'Anguilla', 662: 'Saint Lucia', 663: 'Saint Martin', 666: 'Saint Pierre and Miquelon',
+      670: 'Saint Vincent and the Grenadines', 674: 'San Marino', 678: 'São Tomé and Príncipe',
+      682: 'Saudi Arabia', 686: 'Senegal', 688: 'Serbia', 690: 'Seychelles', 694: 'Sierra Leone',
+      702: 'Singapore', 703: 'Slovakia', 704: 'Vietnam', 705: 'Slovenia', 706: 'Somalia',
+      710: 'South Africa', 716: 'Zimbabwe', 724: 'Spain', 728: 'South Sudan', 729: 'Sudan',
+      732: 'Western Sahara', 740: 'Suriname', 744: 'Svalbard and Jan Mayen', 748: 'Eswatini',
+      752: 'Sweden', 756: 'Switzerland', 760: 'Syria', 762: 'Tajikistan', 764: 'Thailand',
+      768: 'Togo', 772: 'Tokelau', 776: 'Tonga', 780: 'Trinidad and Tobago', 784: 'United Arab Emirates',
+      788: 'Tunisia', 792: 'Turkey', 795: 'Turkmenistan', 796: 'Turks and Caicos Islands',
+      798: 'Tuvalu', 800: 'Uganda', 804: 'Ukraine', 807: 'North Macedonia', 818: 'Egypt',
+      826: 'United Kingdom', 831: 'Guernsey', 832: 'Jersey', 833: 'Isle of Man',
+      834: 'Tanzania', 840: 'United States', 850: 'U.S. Virgin Islands', 854: 'Burkina Faso',
+      858: 'Uruguay', 860: 'Uzbekistan', 862: 'Venezuela', 876: 'Wallis and Futuna',
+      882: 'Samoa', 887: 'Yemen', 894: 'Zambia'
+    };
+    return countryMap[countryCode] || `Country ${countryCode}`;
   }
 
   // Metodo per avviare l'analisi di un URL
@@ -115,6 +175,8 @@ class ApifyService {
   // Metodo per processare i dati grezzi di Apify
   processApifyData(rawData) {
     try {
+      console.log('📊 Processamento dati SimilarWeb...');
+      
       // Processa le visite mensili
       const monthlyVisits = new Map();
       if (rawData.estimatedMonthlyVisits) {
@@ -128,23 +190,31 @@ class ApifyService {
       const averageMonthlyVisits = monthlyVisits.size > 0 ? Math.round(totalVisits / monthlyVisits.size) : 0;
       const estimatedMonthlyShipments = Math.round(averageMonthlyVisits * 0.02); // 2% conversion rate mensile
 
-      // DEBUG: Log dati raw
-      console.log(`🔍 [APIFY] Raw SimilarWeb data for ${rawData.url}:`);
-      console.log(`   - estimatedMonthlyVisits entries: ${monthlyVisits.size}`);
-      console.log(`   - averageMonthlyVisits: ${averageMonthlyVisits}`);
-      console.log(`   - topCountries: ${rawData.topCountries?.length || 0} paesi`);
-      if (rawData.topCountries && rawData.topCountries.length > 0) {
-        console.log(`   - Top 3 countries:`, rawData.topCountries.slice(0, 3).map(c => 
-          `${c.countryCode}: ${(c.visitsShare * 100).toFixed(1)}%`
-        ).join(', '));
-      }
+      console.log(`📈 Visite medie mensili: ${averageMonthlyVisits}`);
+      console.log(`📦 Spedizioni stimate mensili: ${estimatedMonthlyShipments}`);
 
-      // Processa i paesi con calcoli di spedizioni mensili
-      const topCountries = rawData.topCountries?.map(country => ({
-        ...country,
-        estimatedVisits: Math.round(averageMonthlyVisits * country.visitsShare),
-        estimatedShipments: Math.round(averageMonthlyVisits * country.visitsShare * 0.02)
-      })) || [];
+      // 🆕 Processa i paesi (nuovo actor usa topCountryShares invece di topCountries)
+      const rawCountries = rawData.topCountryShares || rawData.topCountries || [];
+      const topCountries = rawCountries.map(country => {
+        // Supporta sia il nuovo formato (topCountryShares) che il vecchio (topCountries)
+        const countryCode = country.CountryCode || country.countryCode;
+        const countryName = country.countryName || this.getCountryName(country.Country || countryCode);
+        const visitsShare = country.Value !== undefined ? country.Value : country.visitsShare;
+        
+        return {
+          countryCode: countryCode,
+          countryName: countryName,
+          countryUrlCode: country.countryUrlCode || countryCode?.toLowerCase(),
+          visitsShare: visitsShare,
+          estimatedVisits: Math.round(averageMonthlyVisits * visitsShare),
+          estimatedShipments: Math.round(averageMonthlyVisits * visitsShare * 0.02)
+        };
+      });
+
+      console.log(`🌍 Paesi processati: ${topCountries.length}`);
+      if (topCountries.length > 0) {
+        console.log(`   Top paese: ${topCountries[0].countryName} (${(topCountries[0].visitsShare * 100).toFixed(1)}% visite)`);
+      }
 
       // Estrai vertical dalla category
       let vertical = '';
@@ -153,10 +223,20 @@ class ApifyService {
         vertical = categoryParts[categoryParts.length - 1].replace(/_/g, ' ');
       }
 
+      // 🆕 Gestisci countryRank (nuovo actor ha formato diverso)
+      let countryRank = rawData.countryRank;
+      if (rawData.countryRank && typeof rawData.countryRank === 'object') {
+        countryRank = {
+          Country: rawData.countryRank.Country,
+          CountryCode: rawData.countryRank.CountryCode,
+          Rank: rawData.countryRank.Rank
+        };
+      }
+
       return {
         // Dati base
-        url: rawData.url,
-        name: rawData.name,
+        url: rawData.domain || rawData.url,
+        name: rawData.name || rawData.domain || rawData.url,
         title: rawData.title,
         description: rawData.description,
         category: rawData.category,
@@ -166,15 +246,21 @@ class ApifyService {
         icon: rawData.icon,
         previewDesktop: rawData.previewDesktop,
         previewMobile: rawData.previewMobile,
+        screenshot: rawData.screenshot,
         
         // Rankings
         globalRank: rawData.globalRank,
-        countryRank: rawData.countryRank,
+        countryRank: countryRank,
         categoryRank: rawData.categoryRank,
         globalCategoryRank: rawData.globalCategoryRank,
         
         // Engagement
-        engagements: rawData.engagements,
+        engagements: rawData.engagements || {
+          bounceRate: rawData.bounceRate,
+          pagesPerVisit: rawData.pagesPerVisit,
+          timeOnSite: rawData.timeOnSite,
+          visits: rawData.visits
+        },
         
         // Traffic sources
         trafficSources: rawData.trafficSources,
@@ -201,8 +287,8 @@ class ApifyService {
         
         // Metadati Apify
         apifyData: {
-          scrapedAt: new Date(rawData.scrapedAt),
-          snapshotDate: new Date(rawData.snapshotDate),
+          scrapedAt: rawData.scrapedAt ? new Date(rawData.scrapedAt) : new Date(),
+          snapshotDate: rawData.snapshotDate ? new Date(rawData.snapshotDate) : new Date(),
           processingTime: Date.now()
         },
         
@@ -212,6 +298,7 @@ class ApifyService {
 
     } catch (error) {
       console.error('❌ Errore processamento dati Apify:', error);
+      console.error('📊 Raw data:', JSON.stringify(rawData, null, 2));
       throw new Error('Errore nel processamento dei dati ricevuti');
     }
   }
@@ -265,12 +352,11 @@ class ApifyService {
   // Metodo per Google Search con Apify
   async googleSearch(query, options = {}) {
     try {
-      const maxPages = options.maxPagesPerQuery || 5;
-      console.log(`🔍 Google Search con Apify per query: "${query}" (max ${maxPages} pagine)`);
+      console.log(`🔍 Google Search con Apify per query: "${query}"`);
       
       const input = {
         queries: query,
-        maxPagesPerQuery: maxPages, // Default: 5 pagine (~50 risultati)
+        maxPagesPerQuery: 5, // ~10 risultati per pagina = ~50 risultati totali
         resultsPerPage: 10,
         countryCode: 'it',
         languageCode: 'it',
@@ -335,234 +421,6 @@ class ApifyService {
     return processedResults;
   }
 
-  /**
-   * Crawl website per estrarre contenuto testuale (per enrichment contatti)
-   * Usa Website Content Crawler di Apify
-   * @param {string} url - URL del sito da crawlare
-   * @param {object} options - Opzioni crawler
-   * @returns {Promise<Array>} - Array di pagine con testo estratto
-   */
-  async crawlWebsite(url, options = {}) {
-    try {
-      console.log(`🕷️  Website Crawler per: ${url}`);
-      
-      // Estrai dominio
-      const urlObj = new URL(url);
-      const baseUrl = `${urlObj.protocol}//${urlObj.hostname}`;
-      
-      const input = {
-        startUrls: [{ url: baseUrl }],
-        crawlerType: 'playwright:firefox', // Browser per siti dinamici
-        maxCrawlPages: 10, // Aumentato a 10 per trovare pagina contatti
-        // RIMUOVO includeUrlGlobs - troppo restrittivo!
-        // Uso solo excludeUrlGlobs per evitare pagine inutili
-        excludeUrlGlobs: [
-          '**/*privacy*',
-          '**/*cookie*',
-          '**/*termini*',
-          '**/*terms*',
-          '**/*conditions*',
-          '**/*product/*', // Evita pagine prodotto singolo
-          '**/*prodotto/*',
-          '**/*p/*',
-          '**/*shop/*',
-          '**/*cart*',
-          '**/*checkout*',
-          '**/*login*',
-          '**/*register*',
-          '**/*account*',
-          '**/*wishlist*',
-          '**/*blog/*', // Evita articoli blog
-          '**/*news/*',
-          '**/*category/*',
-          '**/*categoria/*'
-        ],
-        htmlTransformer: 'readableText', // Estrai solo testo leggibile
-        readableTextCharThreshold: 100,
-        saveHtml: false,
-        saveMarkdown: false,
-        saveFiles: false,
-        removeElementsCssSelector: 'nav, footer, script, style, [class*="cookie"], [class*="popup"], [role="navigation"]',
-        clickElementsCssSelector: '', // Non cliccare elementi
-        maxCrawlDepth: 2, // Massimo 2 livelli di profondità
-        maxConcurrency: 2, // Aumentato per velocità
-        maxRequestRetries: 2,
-        requestTimeoutSecs: 30,
-        ...options
-      };
-
-      console.log(`🔎 Crawl impostato: max ${input.maxCrawlPages} pagine, depth ${input.maxCrawlDepth}`);
-
-      const response = await axios.post(
-        `${this.baseUrl}/acts/apify~website-content-crawler/run-sync-get-dataset-items`,
-        input,
-        {
-          headers: {
-            'Authorization': `Bearer ${this.apiToken}`,
-            'Content-Type': 'application/json'
-          },
-          params: {
-            token: this.apiToken
-          },
-          timeout: 180000 // 3 minuti timeout (crawler è più lento)
-        }
-      );
-
-      if (response.data && response.data.length > 0) {
-        console.log(`✅ Website crawl completato: ${response.data.length} pagine estratte`);
-        
-        // Log pagine trovate
-        response.data.forEach((page, idx) => {
-          console.log(`  📄 Pagina ${idx + 1}: ${page.url} (${page.text?.length || 0} caratteri)`);
-        });
-        
-        return response.data;
-      } else {
-        console.log('⚠️  Nessuna pagina crawlata');
-        return [];
-      }
-
-    } catch (error) {
-      console.error(`❌ Errore Website Crawler:`, error.message);
-      throw this.handleApifyError(error);
-    }
-  }
-
-  /**
-   * Controlla la piattaforma ecommerce di un sito usando BuiltWith
-   * @param {string} url - URL del sito da controllare
-   * @returns {Promise<{platform: string|null, isSupported: boolean, allTechnologies: array}>}
-   */
-  async checkEcommercePlatform(url) {
-    console.log(`\n🏗️  [BUILTWITH] checkEcommercePlatform chiamata`);
-    console.log(`🏗️  [BUILTWITH] URL input: ${url}`);
-    
-    try {
-      // Estrai solo il dominio (builtwith vuole formato "example.com" senza http)
-      console.log(`🏗️  [BUILTWITH] Estrazione dominio...`);
-      const urlObj = new URL(url.startsWith('http') ? url : `https://${url}`);
-      const domain = urlObj.hostname.replace(/^www\./i, '');
-      
-      console.log(`🏗️  [BUILTWITH] Dominio estratto: ${domain}`);
-      
-      const input = {
-        url: domain,
-        process: 'gt', // Get Technology Profile
-        cache: '1', // Use cache
-        retries: 1,
-        timeout: 60
-      };
-      
-      console.log(`🏗️  [BUILTWITH] Input preparato:`, JSON.stringify(input, null, 2));
-      console.log(`🏗️  [BUILTWITH] Invio richiesta Apify...`);
-
-      const response = await axios.post(
-        `${this.baseUrl}/acts/canadesk~builtwith/run-sync-get-dataset-items`,
-        input,
-        {
-          headers: {
-            'Authorization': `Bearer ${this.apiToken}`,
-            'Content-Type': 'application/json'
-          },
-          params: {
-            token: this.apiToken
-          },
-          timeout: 60000 // 60 secondi timeout
-        }
-      );
-
-      console.log(`🏗️  [BUILTWITH] Risposta ricevuta!`);
-      console.log(`🏗️  [BUILTWITH] Status: ${response.status}`);
-      console.log(`🏗️  [BUILTWITH] Data type: ${typeof response.data}`);
-      console.log(`🏗️  [BUILTWITH] Data length: ${response.data?.length || 0}`);
-      
-      if (!response.data || response.data.length === 0) {
-        console.log(`⚠️  [BUILTWITH] Nessuna tecnologia trovata per ${domain}`);
-        return {
-          platform: null,
-          isSupported: false,
-          allTechnologies: []
-        };
-      }
-
-      // Piattaforme ecommerce supportate (case-insensitive)
-      const supportedPlatforms = [
-        'woocommerce',
-        'wordpress', 
-        'prestashop',
-        'shopify',
-        'storeden',
-        'magento',
-        'wix',
-        'opencart',
-        'teamsystem',
-        'teamsystem commerce'
-      ];
-
-      // Estrai tutte le tecnologie (response.data è già l'array)
-      const technologies = response.data;
-      const techNames = technologies.map(t => t.name?.toLowerCase() || '');
-      
-      console.log(`📦 [BUILTWITH] Tecnologie trovate (${techNames.length}):`, techNames.slice(0, 10));
-
-      // Cerca piattaforma ecommerce
-      let detectedPlatform = null;
-      let isSupported = false;
-
-      for (const tech of technologies) {
-        const techName = (tech.name || '').toLowerCase();
-        const category = (tech.category || '').toLowerCase();
-        
-        // Controlla se è una piattaforma supportata
-        for (const platform of supportedPlatforms) {
-          if (techName.includes(platform) || 
-              (category.includes('ecommerce') && techName.includes(platform))) {
-            detectedPlatform = platform;
-            isSupported = true;
-            break;
-          }
-        }
-        
-        if (isSupported) break;
-      }
-
-      if (detectedPlatform) {
-        console.log(`✅ [BUILTWITH] Piattaforma supportata: ${detectedPlatform}`);
-      } else {
-        console.log(`❌ [BUILTWITH] Piattaforma non supportata o non rilevata`);
-      }
-      
-      const result = {
-        platform: detectedPlatform,
-        isSupported,
-        allTechnologies: technologies.map(t => ({
-          name: t.name,
-          category: t.category
-        }))
-      };
-      
-      console.log(`🏗️  [BUILTWITH] Risultato finale:`, JSON.stringify(result, null, 2));
-      console.log(`🏗️  [BUILTWITH] checkEcommercePlatform completato\n`);
-
-      return result;
-
-    } catch (error) {
-      console.error(`❌ Errore BuiltWith check:`, error.message);
-      console.error(`🔍 Stack trace:`, error.stack);
-      console.error(`📡 Response:`, error.response?.data);
-      console.error(`📊 Status:`, error.response?.status);
-      
-      // In caso di errore, assumiamo che sia supportato (per non bloccare tutto)
-      console.log(`⚠️  FALLBACK: Accetto lead nonostante errore BuiltWith`);
-      return {
-        platform: null,
-        isSupported: true, // Default: non blocchiamo se BuiltWith fallisce
-        allTechnologies: [],
-        error: error.message
-      };
-    }
-  }
-
   // Metodo per ottenere statistiche sull'uso dell'API Apify
   async getApiStats() {
     try {
@@ -586,229 +444,6 @@ class ApifyService {
     } catch (error) {
       console.error('Errore recupero statistiche Apify:', error);
       return null;
-    }
-  }
-
-  /**
-   * Pulisce un URL Amazon rimuovendo parametri di tracking non necessari
-   * @param {string} amazonUrl - URL Amazon originale
-   * @returns {string} - URL pulito
-   */
-  cleanAmazonUrl(amazonUrl) {
-    try {
-      const url = new URL(amazonUrl);
-      
-      // Parametri essenziali da mantenere
-      const essentialParams = ['k', 'node', 'i', 'rh', 's', 'page'];
-      
-      // Crea nuova URLSearchParams solo con parametri essenziali
-      const cleanParams = new URLSearchParams();
-      essentialParams.forEach(param => {
-        if (url.searchParams.has(param)) {
-          cleanParams.set(param, url.searchParams.get(param));
-        }
-      });
-      
-      // Ricostruisci l'URL
-      const cleanUrl = `${url.origin}${url.pathname}${cleanParams.toString() ? '?' + cleanParams.toString() : ''}`;
-      return cleanUrl;
-      
-    } catch (error) {
-      console.warn('⚠️  Errore pulizia URL, uso originale:', error.message);
-      return amazonUrl;
-    }
-  }
-
-  /**
-   * Scrapa prodotti Amazon usando Free Amazon Product Scraper
-   * @param {string} amazonUrl - URL Amazon (categoria, ricerca, etc)
-   * @param {object} options - Opzioni scraper
-   * @returns {Promise<Array>} - Array di prodotti con dati venditori
-   */
-  async scrapeAmazonProducts(amazonUrl, options = {}) {
-    try {
-      console.log(`🛒 Amazon Product Scraper per: ${amazonUrl}`);
-      
-      // Pulisci l'URL rimuovendo parametri di tracking non necessari
-      const cleanedUrl = this.cleanAmazonUrl(amazonUrl);
-      console.log(`🧹 URL pulito: ${cleanedUrl}`);
-      
-      // L'actor "Free Amazon Product Scraper" accetta categoryUrls come array di oggetti
-      const input = {
-        categoryUrls: [{
-          url: cleanedUrl,
-          method: 'GET'
-        }],
-        maxItems: options.maxItems || 50,
-        ...options
-      };
-
-      console.log(`📦 Scraping Amazon: max ${input.maxItems} prodotti`);
-      console.log(`📋 Input Apify:`, JSON.stringify(input, null, 2));
-      console.log(`🚀 Avvio actor Apify in modalità ASYNC...`);
-
-      // Avvia l'actor in modalità ASYNC
-      const runResponse = await axios.post(
-        `${this.baseUrl}/acts/junglee~free-amazon-product-scraper/runs`,
-        input,
-        {
-          headers: {
-            'Authorization': `Bearer ${this.apiToken}`,
-            'Content-Type': 'application/json'
-          },
-          params: {
-            token: this.apiToken,
-            waitForFinish: 600 // Aspetta fino a 10 minuti
-          },
-          timeout: 660000 // 11 minuti timeout totale
-        }
-      );
-
-      console.log(`✅ Actor avviato con ID: ${runResponse.data.data.id}`);
-      console.log(`📊 Status: ${runResponse.data.data.status}`);
-
-      // Estrai i risultati dal dataset
-      const datasetId = runResponse.data.data.defaultDatasetId;
-      console.log(`📦 Dataset ID: ${datasetId}`);
-
-      const datasetResponse = await axios.get(
-        `${this.baseUrl}/datasets/${datasetId}/items`,
-        {
-          headers: {
-            'Authorization': `Bearer ${this.apiToken}`
-          },
-          params: {
-            token: this.apiToken
-          }
-        }
-      );
-
-      const results = datasetResponse.data;
-      console.log(`📡 Risposta ricevuta da Apify`);
-      console.log(`📊 Numero risultati: ${results?.length || 0}`);
-
-      if (results && results.length > 0) {
-        console.log(`✅ Amazon scraping completato: ${results.length} prodotti`);
-        
-        // Filtra e processa i risultati
-        const products = results
-          .filter(p => p.seller && p.seller.id && p.seller.url) // Solo prodotti con venditore
-          .map(p => ({
-            asin: p.asin,
-            title: p.title,
-            url: p.url,
-            price: p.price,
-            seller: {
-              name: p.seller.name,
-              id: p.seller.id,
-              url: p.seller.url
-            }
-          }));
-        
-        console.log(`📊 Prodotti con venditori: ${products.length}`);
-        return products;
-      } else {
-        console.log('⚠️  Nessun prodotto trovato');
-        return [];
-      }
-
-    } catch (error) {
-      console.error(`❌ Errore Amazon Product Scraper:`, error.message);
-      throw this.handleApifyError(error);
-    }
-  }
-
-  /**
-   * Crawla una seller page Amazon per estrarre il testo
-   * @param {string} sellerUrl - URL seller page Amazon
-   * @param {string} marketplace - Marketplace (amazon.it, amazon.fr, etc)
-   * @returns {Promise<string>} - Testo estratto dalla pagina
-   */
-  async crawlAmazonSellerPage(sellerUrl, marketplace = 'amazon.it') {
-    try {
-      console.log(`📄 Crawl seller page: ${sellerUrl}`);
-      
-      // Assicurati che l'URL sia completo
-      let fullUrl = sellerUrl;
-      if (!sellerUrl.startsWith('http')) {
-        fullUrl = `https://www.${marketplace}${sellerUrl.startsWith('/') ? '' : '/'}${sellerUrl}`;
-      }
-      
-      console.log(`🔗 URL completo: ${fullUrl}`);
-      
-      const input = {
-        startUrls: [{ url: fullUrl }],
-        crawlerType: 'playwright:chrome', // Chrome più compatibile con Amazon
-        maxCrawlPages: 1, // Solo questa pagina
-        maxCrawlDepth: 0, // Nessun link interno
-        htmlTransformer: 'readableText',
-        readableTextCharThreshold: 30,
-        saveHtml: false,
-        saveMarkdown: false,
-        saveFiles: false,
-        // NON rimuovere troppo - potrebbe contenere dati compliance
-        removeElementsCssSelector: 'nav, script, style, [class*="cookie"]',
-        maxConcurrency: 1,
-        maxRequestRetries: 3,
-        requestTimeoutSecs: 60,
-        // ⚡ IMPORTANTE: Aspetta caricamento dinamico
-        waitUntil: ['networkidle', 'domcontentloaded'],
-        // Aspetta 5 secondi per il rendering JavaScript
-        waitForSelector: 'body',
-        additionalWaitForRequestsMillis: 5000,
-        // User Agent realistico
-        customUserAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        proxyConfiguration: {
-          useApifyProxy: true,
-          apifyProxyGroups: ['RESIDENTIAL']
-        }
-      };
-
-      console.log(`🕷️  Crawl avviato con configurazione:`);
-      console.log(`   - Browser: ${input.crawlerType}`);
-      console.log(`   - Timeout: ${input.requestTimeoutSecs}s`);
-      console.log(`   - WaitUntil: ${input.waitUntil.join(', ')}`);
-      console.log(`   - Extra wait: ${input.additionalWaitForRequestsMillis}ms`);
-
-      const response = await axios.post(
-        `${this.baseUrl}/acts/apify~website-content-crawler/run-sync-get-dataset-items`,
-        input,
-        {
-          headers: {
-            'Authorization': `Bearer ${this.apiToken}`,
-            'Content-Type': 'application/json'
-          },
-          params: {
-            token: this.apiToken
-          },
-          timeout: 180000 // 3 minuti timeout (aumentato per il wait time)
-        }
-      );
-
-      if (response.data && response.data.length > 0) {
-        const pageText = response.data[0].text || '';
-        const htmlSnapshot = response.data[0].html || '';
-        
-        console.log(`✅ Seller page crawlata: ${pageText.length} caratteri`);
-        console.log(`📄 HTML length: ${htmlSnapshot.length} caratteri`);
-        
-        // Log primi 500 caratteri per debug
-        console.log(`📝 Prime 500 chars del testo:`);
-        console.log(pageText.slice(0, 500));
-        
-        if (pageText.length < 100) {
-          console.warn(`⚠️  ATTENZIONE: Pagina molto corta (${pageText.length} chars)`);
-          console.warn(`   Potrebbe essere bloccata o vuota. Ritorno comunque il testo.`);
-        }
-        
-        return pageText;
-      } else {
-        throw new Error('Nessun contenuto estratto dalla seller page');
-      }
-
-    } catch (error) {
-      console.error(`❌ Errore crawl seller page:`, error.message);
-      throw this.handleApifyError(error);
     }
   }
 }
