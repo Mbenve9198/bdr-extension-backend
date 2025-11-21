@@ -73,8 +73,9 @@ class ApifyService {
     try {
       console.log(`🚀 Avvio analisi per URL: ${url}`);
       
+      // 🆕 Il nuovo actor curious_coder~similarweb-scraper usa "domains" invece di "websites"
       const input = {
-        websites: [url],
+        domains: [url],
         maxRequestRetries: 3,
         requestTimeoutSecs: 30,
         ...options
@@ -113,8 +114,9 @@ class ApifyService {
     try {
       console.log(`🚀 Avvio analisi asincrona per URL: ${url}`);
       
+      // 🆕 Il nuovo actor curious_coder~similarweb-scraper usa "domains" invece di "websites"
       const input = {
-        websites: [url],
+        domains: [url],
         maxRequestRetries: 3,
         requestTimeoutSecs: 30,
         ...options
